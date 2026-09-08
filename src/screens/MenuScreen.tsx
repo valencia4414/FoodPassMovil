@@ -1,5 +1,11 @@
 // src/screens/MenuScreen.tsx
 import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList } from 'react-native';
+import { PlatilloCard } from '../components/PlatilloCard';  // Componente Tarea 58
+import { LoadingSpinner } from '../components/LoadingSpinner'; // Componente Tarea 56
+import { fetchApi } from '../services/api';              // Servicio Tareas 54, 55, 61
+import strings from '../lang/es.json';                   // Idioma Tarea 59
 import {
   View,
   Text,
@@ -22,6 +28,50 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 40 - 12) / 2;
 
 const categories = ['Todos', 'Entradas', 'Plato Fuerte', 'Postres'];
+
+export const MenuScreen = () => {
+  // Tarea 60: Estado local (useState) para controlar la pantalla
+  const [loading, setLoading] = useState(true);
+  const [platillos, setPlatillos] = useState([]);
+
+  useEffect(() => {
+    obtenerMenu();
+  }, []);
+
+  const obtenerMenu = async () => {
+    setLoading(true);
+    const data = await fetchApi('https://tu-backend-api.com/menu');
+    if (data) setPlatillos(data);
+    setLoading(false);
+  };
+
+  // Tarea 56: Si 'loading' es true, muestra el spinner en vez de la lista
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  // RENDER: Aquí va lo que se dibuja en pantalla
+  return (
+    <View style={{ flex: 1, padding: 15 }}>
+      {/* Tarea 59: Texto desde el JSON de idioma */}
+      <Text style={{ fontSize: 20, fontWeight: 'bold' }}>{strings.menu_titulo}</Text>
+
+      {/* FlatList dibuja la lista usando PlatilloCard */}
+      <FlatList
+        data={platillos}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          /* Tarea 58: Renderizar el componente reutilizable */
+          <PlatilloCard 
+            nombre={item.nombre} 
+            descripcion={item.descripcion} 
+            precio={item.precio} 
+          />
+        )}
+      />
+    </View>
+  );
+};
 
 const menuItems = [
   {
