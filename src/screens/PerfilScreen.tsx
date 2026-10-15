@@ -90,26 +90,25 @@ export default function PerfilScreen() {
   const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
   const [menuPrefsVisible, setMenuPrefsVisible] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuPrefItem | null>(null);
+  
   const navigation = useNavigation<any>();
-const { logout, userData } = useAuth();
-const { addItem } = useCart();
+  const { logout, userData } = useAuth();
+  const { addItem } = useCart(); // Declarado una sola vez correctamente
 
-const userName = userData?.name || 'Carlos Mendoza';
-const userEmail = userData?.email || 'carlos@foodpass.com';
+  const userName = userData?.name || 'Carlos Mendoza';
+  const userEmail = userData?.email || 'carlos@foodpass.com';
 
-const userInitials = userName
-  .split(' ')
-  .filter(Boolean)
-  .map((w) => w[0])
-  .slice(0, 2)
-  .join('')
-  .toUpperCase() || 'CM';
+  const userInitials = userName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'CM';
 
-const userPlan = userData?.plan
-  ? `${userData.plan} Member`
-  : 'Premium Member';
-  const { addItem } = useCart();
-
+  const userPlan = userData?.plan
+    ? `${userData.plan} Member`
+    : 'Premium Member';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -305,7 +304,7 @@ const userPlan = userData?.plan
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Información personal</Text>
-            <Text style={styles.modalOptionTitle}>Juan Perez</Text>
+            <Text style={styles.modalOptionTitle}>{userName}</Text>
             <Text style={styles.modalOptionDesc}>Apto para ayuda alimenticia</Text>
             <TouchableOpacity
               style={styles.modalCloseButton}
@@ -406,7 +405,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.surface },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(255,255,255,0.85)', elevation: 3 },
   topBarTitle: { fontSize: 20, fontWeight: '800', color: Colors.onBackground, letterSpacing: -0.3 },
-  topBarAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
   profileCard: { margin: 20, backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxxl, padding: 28, alignItems: 'center' },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginBottom: 14, position: 'relative' },
@@ -434,7 +432,7 @@ const styles = StyleSheet.create({
   settingBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.onPrimaryContainer, letterSpacing: 0.5 },
   logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginHorizontal: 20, marginTop: 8, paddingVertical: 16, backgroundColor: Colors.errorContainer, borderRadius: BorderRadius.xl },
   logoutText: { fontSize: 15, fontWeight: '700', color: Colors.error },
-  // ===== ESTILOS DEL MODAL =====
+  
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -495,7 +493,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// ===== ESTILOS PARA PREFERENCIAS DE MENÚ =====
 const menuStyles = StyleSheet.create({
   container: {
     flex: 1,
@@ -577,7 +574,6 @@ const menuStyles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.onSurfaceVariant,
   },
-  // Popup detalle
   popupOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
