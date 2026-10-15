@@ -178,18 +178,17 @@ export default function AppNavigator() {
             {() => (
               <LoginScreen
                 onLogin={async (enteredEmail?: string) => {
-                  // Simulamos una respuesta del backend con un token JWT y datos de usuario.
-                  // En producción, estos datos vendrían de la respuesta del endpoint /auth/login.
-                  const simulatedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkNhcmxvcyBNZW5kb3phIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-                  const simulatedUser = {
-                    id: 'usr_001',
-                    name: 'Carlos Mendoza',
-                    email: enteredEmail && enteredEmail.includes('@') ? enteredEmail.trim() : 'carlos@foodpass.com',
-                    role: 'employee',
+                  // Token JWT válido firmado con el JWT_SECRET del backend para desarrollo e integración
+                  const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJjYXJsb3NAc295LnNlbmEuZWR1LmNvIiwicm9sZSI6ImJlbmVmaWNpYXJpbyIsImlhdCI6MTc5MjAzMDc2NiwiZXhwIjoxNzk0NjIyNzY2fQ.aJLgcFM3RkLzOT4N4XiuiEha9iP0dKo8KQ1ZSZ_O4xQ';
+                  const validUser = {
+                    id: 4,
+                    name: 'Carlos Aprendiz',
+                    email: enteredEmail && enteredEmail.includes('@') ? enteredEmail.trim() : 'carlos@soy.sena.edu.co',
+                    role: 'beneficiario',
                     plan: 'Premium',
                   };
 
-                  await login(simulatedToken, simulatedUser);
+                  await login(validToken, validUser);
                 }}
               />
             )}
