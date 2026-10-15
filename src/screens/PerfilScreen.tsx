@@ -90,26 +90,25 @@ export default function PerfilScreen() {
   const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
   const [menuPrefsVisible, setMenuPrefsVisible] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuPrefItem | null>(null);
+  
   const navigation = useNavigation<any>();
-const { logout, userData } = useAuth();
-const { addItem } = useCart();
+  const { logout, userData } = useAuth();
+  const { addItem } = useCart(); // Declarado una sola vez correctamente
 
-const userName = userData?.name || 'Carlos Mendoza';
-const userEmail = userData?.email || 'carlos@foodpass.com';
+  const userName = userData?.name || 'Carlos Mendoza';
+  const userEmail = userData?.email || 'carlos@foodpass.com';
 
-const userInitials = userName
-  .split(' ')
-  .filter(Boolean)
-  .map((w) => w[0])
-  .slice(0, 2)
-  .join('')
-  .toUpperCase() || 'CM';
+  const userInitials = userName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'CM';
 
-const userPlan = userData?.plan
-  ? `${userData.plan} Member`
-  : 'Premium Member';
-  const { addItem } = useCart();
-
+  const userPlan = userData?.plan
+    ? `${userData.plan} Member`
+    : 'Premium Member';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

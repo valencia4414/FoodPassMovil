@@ -1,12 +1,6 @@
 // src/screens/LoginScreen.tsx
 //
-// Pantalla de inicio de sesión.
-//
-// Conceptos nuevos en este archivo:
-// - useState: Hook para manejar estado local (variables que cambian)
-// - KeyboardAvoidingView: Mueve el contenido cuando aparece el teclado
-// - TextInput: Campo de texto para el usuario
-// - Platform: Detecta si estamos en iOS o Android
+// Pantalla de inicio de sesión integrada con el Backend y AuthContext (T03).
 
 import React, { useState } from 'react';
 import {
@@ -19,23 +13,17 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, BorderRadius, Typography } from '../theme/colors';
+import { Colors, BorderRadius } from '../theme/colors';
 import { Image } from 'react-native';
+import apiClient from '../services/apiClient';
+import { useAuth } from '../context/AuthContext'; // <-- Importamos el hook de autenticación
 
-// Props que recibe esta pantalla desde el Navigator
-interface LoginScreenProps {
-  onLogin: (email?: string) => void | Promise<void>; // Función que se llama cuando el login es exitoso
-}
-
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
-  // useState es un "Hook" — una función especial de React que crea una variable
-  // que cuando cambia, hace que el componente se vuelva a renderizar.
-  //
-  // Sintaxis: const [valor, setValor] = useState(valorInicial)
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,60 +31,76 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  // Función que simula el proceso de login
+  // Extraemos la función login del contexto global
+  const { login } = useAuth();
+
+  // Función de inicio de sesión (T03: Conexión con POST /api/auth/login, manejo de errores y guardado de JWT)
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Simula pequeña latencia de red para la animación de carga
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await onLogin(email);
-    } catch (error) {
+      // Petición POST al endpoint real de autenticación
+      const response = await apiClient.post('/api/auth/login', {
+        email: email.trim(),
+        password: password,
+      });
+
+      // Extraemos el token JWT y los datos del usuario devueltos por el backend
+      const { token, user } = response.data;
+
+      if (!token) {
+        throw new Error('No se recibió un token válido del servidor.');
+      }
+
+      // Guardamos el token y los datos usando el AuthContext (esto actualiza el SecureStore y el estado global)
+      await login(token, user || { id: '1', name: email.split('@')[0], email, role: 'client' });
+
+    } catch (error: any) {
       console.error('[LoginScreen] Error durante login:', error);
+      
+      // Manejo de errores detallado según la respuesta del backend
+      const errorMessage =
+        error.response?.data?.message || 
+        error.message || 
+        'Credenciales incorrectas o error de conexión con el servidor.';
+      
+      Alert.alert('Error de autenticación', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    // SafeAreaView respeta el notch y la barra inferior del teléfono
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-
-      {/* Círculos decorativos del fondo (equivalente a los blobs del diseño web) */}
       <View style={styles.blobTopLeft} />
       <View style={styles.blobBottomRight} />
 
-      {/* KeyboardAvoidingView sube el contenido cuando aparece el teclado.
-          El comportamiento varía entre iOS ('padding') y Android ('height') */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* ScrollView permite scroll si el contenido no cabe en pantalla
-            (cuando el teclado está abierto en teléfonos pequeños) */}
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled" // Permite tocar botones con el teclado abierto
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* === TARJETA PRINCIPAL === */}
           <View style={styles.card}>
-           {/* === SECCIÓN DEL LOGO === */}
-             <View style={styles.logoSection}>
-               <Image
-                  source={require('../../assets/foodpass_logo.png')}
-                    style={styles.logoImage}
-                     resizeMode="contain"
-                  />
-               </View>
+            <View style={styles.logoSection}>
+              <Image
+                source={require('../../assets/foodpass_logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
 
-            {/* === FORMULARIO === */}
             {/* Campo de Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-              <View style={[
-                styles.inputWrapper,
-                emailFocused && styles.inputWrapperFocused, // Aplica estilo adicional si está enfocado
-              ]}>
+              <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
                 <MaterialIcons
                   name="mail"
                   size={20}
@@ -106,14 +110,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 <TextInput
                   style={styles.input}
                   placeholder="name@example.com"
-                  placeholderTextColor={Colors.onSurfaceVariant + '80'} // 50% de opacidad
+                  placeholderTextColor={Colors.onSurfaceVariant + '80'}
                   value={email}
-                  onChangeText={setEmail}         // Se llama cada vez que el usuario escribe
+                  onChangeText={setEmail}
                   onFocus={() => setEmailFocused(true)}
                   onBlur={() => setEmailFocused(false)}
-                  keyboardType="email-address"    // Teclado optimizado para emails
-                  autoCapitalize="none"           // No capitaliza automáticamente
-                  autoCorrect={false}             // Sin autocorrección
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </View>
             </View>
@@ -126,10 +130,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   <Text style={styles.forgotText}>¿OLVIDASTE?</Text>
                 </TouchableOpacity>
               </View>
-              <View style={[
-                styles.inputWrapper,
-                passwordFocused && styles.inputWrapperFocused,
-              ]}>
+              <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
                 <MaterialIcons
                   name="lock"
                   size={20}
@@ -144,10 +145,9 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                   onChangeText={setPassword}
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
-                  secureTextEntry={!showPassword}  // Oculta el texto cuando es true
+                  secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
-                {/* Botón para mostrar/ocultar contraseña */}
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeButton}
@@ -162,8 +162,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </View>
             </View>
 
-            {/* Botón de Login con degradado */}
-            {/* LinearGradient requiere la librería expo-linear-gradient */}
+            {/* Botón de Login */}
             <TouchableOpacity
               onPress={handleLogin}
               activeOpacity={0.9}
@@ -177,7 +176,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 style={styles.loginButton}
               >
                 {isLoading ? (
-                  // ActivityIndicator es el "spinner" de carga nativo
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <>
@@ -188,34 +186,27 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Divisor */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>O CONTINÚA CON</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Botón de Google */}
             <TouchableOpacity style={styles.googleButton} activeOpacity={0.8}>
-              {/* SVG de Google en RN se haría con react-native-svg, 
-                  por simplicidad usamos el texto "G" estilizado */}
               <View style={styles.googleIcon}>
                 <Text style={styles.googleIconText}>G</Text>
               </View>
               <Text style={styles.googleButtonText}>Google</Text>
             </TouchableOpacity>
 
-            {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
               <TouchableOpacity>
                 <Text style={styles.footerLink}>Crear Ledger</Text>
               </TouchableOpacity>
             </View>
-
           </View>
 
-          {/* Indicadores de estado del sistema (detalle artesanal del diseño web) */}
           <View style={styles.statusBar}>
             <View style={styles.statusOnline}>
               <View style={styles.statusDot} />
@@ -226,7 +217,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               <Text style={styles.statusText}>END-TO-END ENCRYPTED</Text>
             </View>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -241,7 +231,6 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  // Decoraciones de fondo
   blobTopLeft: {
     position: 'absolute',
     top: -60,
@@ -272,7 +261,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: BorderRadius.xxxl,
     padding: 28,
-    // Sombra del sistema de diseño
     shadowColor: '#121f05',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.06,
@@ -283,19 +271,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: Colors.inverseSurface,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
+  logoImage: {
+    width: 220,
+    height: 90,
+    alignSelf: 'center',
   },
   fieldGroup: {
     marginBottom: 16,
@@ -325,12 +304,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.surfaceContainer,
     borderRadius: BorderRadius.xl,
-    // Borde invisible (2px transparente) que se vuelve visible al enfocar
     borderWidth: 2,
     borderColor: 'transparent',
   },
   inputWrapperFocused: {
-    // Estado focus: borde verde (tertiary) — el "positive/active state" del diseño
     borderColor: Colors.tertiary,
   },
   inputIcon: {
@@ -345,7 +322,7 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
   },
   inputPassword: {
-    paddingRight: 0, // El botón del ojo ocupa ese espacio
+    paddingRight: 0,
   },
   eyeButton: {
     padding: 14,
@@ -353,7 +330,7 @@ const styles = StyleSheet.create({
   loginButtonWrapper: {
     marginTop: 8,
     borderRadius: BorderRadius.xl,
-    overflow: 'hidden', // Necesario para que el degradado respete el borderRadius
+    overflow: 'hidden',
   },
   loginButton: {
     flexDirection: 'row',
@@ -433,9 +410,9 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '700',
   },
-  statusBar: {
+statusBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between', // Corregido: de justify_content a justifyContent
     alignItems: 'center',
     marginTop: 20,
     paddingHorizontal: 8,
@@ -463,10 +440,4 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     letterSpacing: 1.2,
   },
-
-logoImage: {
-  width: 220,
-  height: 90,
-  alignSelf: 'center',
-},
 });
