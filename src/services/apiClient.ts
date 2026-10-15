@@ -14,7 +14,7 @@
 //   const response = await apiClient.get('/menu');
 //
 
-import axios from 'axios';
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
@@ -29,10 +29,13 @@ export const TOKEN_KEY = 'foodpass_jwt_token';
 // Clave para almacenar los datos del usuario como JSON string.
 export const USER_DATA_KEY = 'foodpass_user_data';
 
-// URL base del backend. En producción se reemplazaría por la URL real.
-// Para desarrollo/emulador Android se usa 10.0.2.2 (host de la máquina).
-// Para iOS simulator se puede usar localhost.
-const API_BASE_URL = 'https://api.foodpass.example.com/v1';
+// URL base del backend FoodPass.
+// - En Android emulator: http://10.0.2.2:3000/api
+// - En Web, iOS y entorno local: http://localhost:3000/api
+const API_BASE_URL = Platform.select({
+  android: 'http://10.0.2.2:3000/api',
+  default: 'http://localhost:3000/api',
+});
 
 // ──────────────────────────────────────────────
 // Capa de Almacenamiento Seguro Multiplataforma
@@ -103,8 +106,13 @@ export const apiClient = axios.create({
 // en la cabecera Authorization como Bearer token.
 
 apiClient.interceptors.request.use(
-  async (config) => {
+  async (config: InternalAxiosRequestConfig) => {
     try {
+      // Normalizar URL si comienza con /api/ para no duplicar con baseURL
+      if (config.url?.startsWith('/api/')) {
+        config.url = config.url.replace(/^\/api/, '');
+      }
+
       // Leemos el token de forma asíncrona desde el almacenamiento seguro.
       const token = await safeStorage.getItem(TOKEN_KEY);
 
@@ -128,7 +136,7 @@ apiClient.interceptors.request.use(
 
     return config;
   },
-  (error) => {
+  (error: any) => {
     // Si hay un error al preparar la petición, lo rechazamos.
     return Promise.reject(error);
   }
@@ -141,11 +149,11 @@ apiClient.interceptors.request.use(
 // Maneja errores comunes de forma centralizada.
 
 apiClient.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     // Si la respuesta es exitosa (2xx), la devolvemos tal cual.
     return response;
   },
-  async (error) => {
+  async (error: any) => {
     const status = error.response?.status;
 
     if (status === 401) {
