@@ -9,7 +9,7 @@ import {
   Image,
   ScrollView,
   Dimensions,
-  TextInput, // <-- Importado para la búsqueda
+  TextInput,
   Modal,
   Pressable,
 } from 'react-native';
@@ -91,17 +91,15 @@ export default function MenuScreen() {
   const [activeCategory, setActiveCategory] = useState('Todos');
   const { addItem, totalItems, getTotalPrice } = useCart();
   const [cartModalOpen, setCartModalOpen] = useState(false);
-  
-  // --- NUEVOS ESTADOS PARA BÚSQUEDA ---
+
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
 
-  // Lógica de filtrado combinada (Categoría + Texto)
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = activeCategory === 'Todos' || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) || 
-                          item.description.toLowerCase().includes(searchText.toLowerCase());
+    const matchesSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchText.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -141,20 +139,16 @@ export default function MenuScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      
-      {/* --- CABECERA CON BUSCADOR DINÁMICO --- */}
       <View style={styles.headerWrapper}>
         <Header title="Menú Digital" showSearch />
-        
-        {/* LUPA INVISIBLE: Cae justo encima del icono de la lupa del Header */}
+
         {!isSearching && (
-          <TouchableOpacity 
-            style={styles.searchActivator} 
-            onPress={() => setIsSearching(true)} 
+          <TouchableOpacity
+            style={styles.searchActivator}
+            onPress={() => setIsSearching(true)}
           />
         )}
 
-        {/* BARRA DE BÚSQUEDA ACTIVA: Tapa el header cuando se activa */}
         {isSearching && (
           <View style={styles.fullSearchBar}>
             <TouchableOpacity onPress={() => { setIsSearching(false); setSearchText(''); }}>
@@ -177,7 +171,6 @@ export default function MenuScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Banner destacado */}
         <View style={styles.featuredBanner}>
           <View style={styles.featuredOverlay}>
             <View style={styles.chefBadge}><Text style={styles.chefBadgeText}>RECOMENDACIÓN DEL CHEF</Text></View>
@@ -205,7 +198,6 @@ export default function MenuScreen() {
           </View>
         </View>
 
-        {/* Filtros de categoría */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContainer} style={styles.filtersScroll}>
           {categories.map((cat) => (
             <TouchableOpacity
@@ -232,7 +224,6 @@ export default function MenuScreen() {
         />
       </ScrollView>
 
-      {/* BARRA FLOTANTE DINÁMICA DEL CARRITO (T07 - RFM04, RFM05) */}
       {totalItems > 0 && (
         <View style={styles.floatingBarWrapper}>
           <TouchableOpacity
@@ -263,7 +254,6 @@ export default function MenuScreen() {
         </View>
       )}
 
-      {/* POPUP DE DETALLE DEL PLATO */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -272,7 +262,6 @@ export default function MenuScreen() {
       >
         <Pressable style={popupStyles.overlay} onPress={() => setSelectedItem(null)}>
           <Pressable style={popupStyles.popup} onPress={(e) => e.stopPropagation()}>
-            {/* Botón cerrar */}
             <TouchableOpacity style={popupStyles.closeBtn} onPress={() => setSelectedItem(null)}>
               <MaterialIcons name="close" size={24} color={Colors.onSurfaceVariant} />
             </TouchableOpacity>
@@ -304,7 +293,6 @@ export default function MenuScreen() {
         </Pressable>
       </Modal>
 
-      {/* MODAL DEL CARRITO Y CHECKOUT */}
       <CartModal
         visible={cartModalOpen}
         onClose={() => setCartModalOpen(false)}
@@ -315,41 +303,10 @@ export default function MenuScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
-  
-  // === ESTILOS DEL BUSCADOR INTERACTIVO ===
-  headerWrapper: {
-    position: 'relative',
-    zIndex: 100,
-  },
-  searchActivator: {
-    position: 'absolute',
-    right: 85, // Ajusta esto para que caiga sobre la lupa del Header
-    top: 10,
-    width: 45,
-    height: 45,
-    borderRadius: 22,
-    zIndex: 101,
-  },
-  fullSearchBar: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#FFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 70, // Ajuste al alto de tu header
-    zIndex: 102,
-    elevation: 4,
-  },
-  inputField: {
-    flex: 1,
-    marginLeft: 15,
-    fontSize: 16,
-    color: '#000',
-    fontWeight: '500',
-  },
-
-  // === RESTO DE ESTILOS ===
+  headerWrapper: { position: 'relative', zIndex: 100 },
+  searchActivator: { position: 'absolute', right: 85, top: 10, width: 45, height: 45, borderRadius: 22, zIndex: 101 },
+  fullSearchBar: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: 70, zIndex: 102, elevation: 4 },
+  inputField: { flex: 1, marginLeft: 15, fontSize: 16, color: '#000', fontWeight: '500' },
   featuredBanner: { marginHorizontal: 20, marginTop: 16, height: 160, borderRadius: BorderRadius.xxxl, backgroundColor: Colors.inverseSurface, overflow: 'hidden', marginBottom: 16 },
   featuredOverlay: { flex: 1, backgroundColor: 'rgba(39, 53, 23, 0.75)', padding: 20, justifyContent: 'space-between' },
   chefBadge: { backgroundColor: Colors.tertiaryContainer, paddingHorizontal: 10, paddingVertical: 3, borderRadius: BorderRadius.full, alignSelf: 'flex-start' },
@@ -381,170 +338,32 @@ const styles = StyleSheet.create({
   cardDescription: { fontSize: 11, color: Colors.onSurfaceVariant, lineHeight: 15, marginBottom: 12 },
   cardFooter: { gap: 8 },
   cardPrice: { fontSize: 20, fontWeight: '800', color: Colors.primaryContainer },
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  selectButton: {
-    flex: 1,
-    backgroundColor: Colors.surfaceContainerLow,
-    paddingVertical: 9,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-  },
-  selectButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.onSurface,
-  },
-  quickAddButton: {
-    backgroundColor: Colors.primaryContainer,
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // === BARRA FLOTANTE DE CARRITO (T07) ===
-  floatingBarWrapper: {
-    position: 'absolute',
-    bottom: 12,
-    left: 16,
-    right: 16,
-    zIndex: 99,
-  },
-  floatingBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.inverseSurface,
-    borderRadius: BorderRadius.xxl,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  floatingBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  floatingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  floatingBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.onPrimaryContainer,
-  },
-  floatingTexts: {
-    justifyContent: 'center',
-  },
-  floatingItemsLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
-  },
-  floatingTotalPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  floatingBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 4,
-  },
-  floatingCheckoutText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.onPrimaryContainer,
-  },
+  cardActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  selectButton: { flex: 1, backgroundColor: Colors.surfaceContainerLow, paddingVertical: 9, borderRadius: BorderRadius.lg, alignItems: 'center' },
+  selectButtonText: { fontSize: 12, fontWeight: '700', color: Colors.onSurface },
+  quickAddButton: { backgroundColor: Colors.primaryContainer, width: 36, height: 36, borderRadius: BorderRadius.lg, justifyContent: 'center', alignItems: 'center' },
+  floatingBarWrapper: { position: 'absolute', bottom: 12, left: 16, right: 16, zIndex: 99 },
+  floatingBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxl, paddingVertical: 12, paddingHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 8 },
+  floatingBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  floatingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryContainer, borderRadius: BorderRadius.full, paddingHorizontal: 8, paddingVertical: 4, gap: 4 },
+  floatingBadgeText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
+  floatingTexts: { justifyContent: 'center' },
+  floatingItemsLabel: { fontSize: 11, color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' },
+  floatingTotalPrice: { fontSize: 15, fontWeight: '800', color: '#ffffff' },
+  floatingBarRight: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryContainer, borderRadius: BorderRadius.xl, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  floatingCheckoutText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
   emptyText: { textAlign: 'center', marginTop: 20, color: Colors.onSurfaceVariant },
 });
 
 const popupStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  popup: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: BorderRadius.xxl,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    position: 'relative',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  image: {
-    width: '100%',
-    height: 180,
-    borderRadius: BorderRadius.xl,
-    marginBottom: 16,
-  },
-  name: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.onSurface,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 14,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  price: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.primaryContainer,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryContainer,
-    paddingVertical: 14,
-    borderRadius: BorderRadius.xl,
-  },
-  addButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.onPrimaryContainer,
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+  popup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 24, width: '100%', maxWidth: 360, position: 'relative' },
+  closeBtn: { position: 'absolute', top: 12, right: 12, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  image: { width: '100%', height: 180, borderRadius: BorderRadius.xl, marginBottom: 16 },
+  name: { fontSize: 20, fontWeight: '800', color: Colors.onSurface, marginBottom: 8 },
+  description: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 16 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  price: { fontSize: 28, fontWeight: '800', color: Colors.primaryContainer },
+  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primaryContainer, paddingVertical: 14, borderRadius: BorderRadius.xl },
+  addButtonText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimaryContainer },
 });

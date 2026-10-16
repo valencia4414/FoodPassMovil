@@ -1,8 +1,9 @@
 // src/screens/PerfilScreen.tsx
 //
-// Pantalla de perfil del usuario.
+// Pantalla de perfil del usuario (T11 - RFM12).
+// Conectada dinámicamente con GET /api/users/me y PUT /api/users/me.
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,16 +14,22 @@ import {
   Image,
   Pressable,
   FlatList,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Colors, BorderRadius } from '../theme/colors';
 import SwitchField from '../components/shared/selection/SwitchField';
-import { useNavigation } from '@react-navigation/native';
 import FavoriteLocationsModal from '../components/shared/selection/FavoriteLocationsModal';
 import SoporteChatScreen from './SoporteChatScreen';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { apiClient } from '../services/apiClient';
 
 // Tipo para los items del menú de configuración
 type SettingItem = {
@@ -35,35 +42,7 @@ type SettingItem = {
   value?: boolean;
 };
 
-const settingsSections: { title: string; items: SettingItem[] }[] = [
-  {
-    title: 'Mi Cuenta',
-    items: [
-      { icon: 'person-outline', label: 'Información personal', type: 'arrow' },
-      { icon: 'workspace-premium', label: 'Mi plan', description: 'Premium · Activo', type: 'badge', badge: 'Premium', badgeColor: Colors.primaryContainer },
-      { icon: 'notifications-none', label: 'Notificaciones', type: 'toggle', value: true },
-      { icon: 'lock-outline', label: 'Seguridad', type: 'arrow' },
-    ],
-  },
-  {
-    title: 'FoodPass',
-    items: [
-      { icon: 'restaurant-menu', label: 'Preferencias de menú', type: 'arrow' },
-      { icon: 'place', label: 'Mis sedes favoritas', type: 'arrow' },
-      { icon: 'card-giftcard', label: 'Programa de puntos', type: 'badge', badge: '1,240 pts', badgeColor: Colors.tertiaryContainer },
-    ],
-  },
-  {
-    title: 'Soporte',
-    items: [
-      { icon: 'help-outline', label: 'Centro de ayuda', type: 'arrow' },
-      { icon: 'chat-bubble-outline', label: 'Contactar soporte', type: 'arrow' },
-      { icon: 'info-outline', label: 'Versión 2.4.1', type: 'badge', badge: 'Actualizado', badgeColor: Colors.tertiaryContainer },
-    ],
-  },
-];
-
-// Datos del menú digital reutilizados
+// Datos del menú digital para modal de preferencias
 const menuPrefsItems = [
   { id: '1', name: 'Artisan Salad Bowl', description: 'Mezcla orgánica de hojas verdes con salmón ahumado.', price: '$18.25', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
   { id: '2', name: 'FoodPass Signature', description: 'Hamburguesa de res premium con queso artesanal.', price: '$14.50', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
@@ -87,38 +66,229 @@ export default function PerfilScreen() {
   const [favModalVisible, setFavModalVisible] = useState(false);
   const [pointsModalVisible, setPointsModalVisible] = useState(false);
   const [selectedReward, setSelectedReward] = useState<string | null>(null);
-  const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
   const [menuPrefsVisible, setMenuPrefsVisible] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuPrefItem | null>(null);
+
+  // Navegación y contextos
   const navigation = useNavigation<any>();
-const { logout, userData } = useAuth();
-const { addItem } = useCart();
 
-const userName = userData?.name || 'Carlos Mendoza';
-const userEmail = userData?.email || 'carlos@foodpass.com';
+  const { logout, userData, updateUser } = useAuth();
+  const { addItem } = useCart();
 
-const userInitials = userName
-  .split(' ')
-  .filter(Boolean)
-  .map((w) => w[0])
-  .slice(0, 2)
-  .join('')
-  .toUpperCase() || 'CM';
+  // Refs para usar siempre el valor más reciente sin recrear fetchProfile
+  // (evita el bucle infinito de peticiones a /users/me)
+  const updateUserRef = useRef<any>(updateUser);
+  const userDataRef = useRef<any>(userData);
+  updateUserRef.current = updateUser;
+  userDataRef.current = userData;
 
-const userPlan = userData?.plan
-  ? `${userData.plan} Member`
-  : 'Premium Member';
+  // 1. Estados de datos reales del perfil
+  const [profileData, setProfileData] = useState<any>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Estados para el Modal de Edición de Información Personal (T11)
+  const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editTelefono, setEditTelefono] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+
+  // 2. Variables calculadas de visualización (declaradas UNA sola vez)
+  const userName: string = profileData?.name || userData?.name || 'Carlos Mendoza';
+  const userEmail: string = profileData?.email || userData?.email || 'carlos@foodpass.com';
+  const userPhone: string = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
+  const userPoints: number = Number(profileData?.puntos_fp ?? 1240) || 0;
+  const userMembership: string =
+    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'Premium';
+
+  const userInitials =
+    userName
+      .split(' ')
+      .filter(Boolean)
+      .map((w: string) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'CM';
+
+  const userPlanText = `${userMembership} Member`;
+
+  // Consultar datos reales del usuario desde el backend (GET /api/users/me)
+  const fetchProfile = useCallback(async (refresh = false) => {
+    if (refresh) setIsRefreshing(true);
+    else setIsLoadingProfile(true);
+
+    try {
+      const response = await apiClient.get('/users/me');
+      if (response.data && response.data.success) {
+        const u = response.data.data;
+        setProfileData(u);
+        // Sincronizar contexto global
+        if (u.name && updateUserRef.current) {
+          await updateUserRef.current({
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            telefono: u.telefono,
+            membresia: u.membresia,
+            puntos_fp: u.puntos_fp,
+          } as any);
+        }
+      }
+    } catch (err: any) {
+      console.warn('[PerfilScreen] No se pudo cargar perfil desde API:', err?.message || err);
+      // Fallback a los datos de sesión solo si aún no hay datos
+      setProfileData((prev: any) => prev ?? userDataRef.current ?? null);
+    } finally {
+      setIsLoadingProfile(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  // useFocusEffect también se ejecuta al montar la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [fetchProfile])
+  );
+
+  // Preparar modal de edición con los datos actuales
+  const handleOpenEditModal = () => {
+    const currentName = profileData?.name || userData?.name || '';
+    const currentTel = profileData?.telefono || (userData as any)?.telefono || '';
+    setEditName(currentName);
+    setEditTelefono(currentTel);
+    setEditError(null);
+    setEditSuccess(null);
+    setPersonalInfoModalVisible(true);
+  };
+
+  // Guardar cambios mediante PUT /api/users/me (T11 - RFM12)
+  const handleSaveProfile = async () => {
+    setEditError(null);
+    setEditSuccess(null);
+
+    const trimmedName = editName.trim();
+    const trimmedTel = editTelefono.trim();
+
+    // Validaciones en cliente
+    if (!trimmedName || trimmedName.length < 2) {
+      setEditError('El nombre completo es obligatorio (mínimo 2 caracteres).');
+      return;
+    }
+    if (trimmedName.length > 100) {
+      setEditError('El nombre no puede exceder 100 caracteres.');
+      return;
+    }
+
+    if (trimmedTel) {
+      const digitsOnly = trimmedTel.replace(/\D/g, '');
+      const validCharsRegex = /^[+]?[\d\s-]+$/;
+      if (!validCharsRegex.test(trimmedTel) || digitsOnly.length < 7 || digitsOnly.length > 15) {
+        setEditError('El número de teléfono debe tener entre 7 y 15 dígitos.');
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await apiClient.put('/users/me', {
+        name: trimmedName,
+        telefono: trimmedTel || null,
+      });
+
+      if (response.data && response.data.success) {
+        const updated = response.data.data;
+        // 1. Actualizar estado local de la pantalla
+        setProfileData(updated);
+
+        // 2. Actualizar estado global en AuthContext (Header, Dashboard, etc.)
+        if (updateUserRef.current) {
+          await updateUserRef.current({
+            name: updated.name,
+            telefono: updated.telefono,
+          } as any);
+        }
+
+        setEditSuccess('¡Perfil actualizado correctamente!');
+
+        // Cerrar modal automáticamente tras breve pausa para mostrar confirmación
+        setTimeout(() => {
+          setPersonalInfoModalVisible(false);
+          setEditSuccess(null);
+        }, 1200);
+      } else {
+        setEditError(response.data?.message || 'Error al guardar los cambios.');
+      }
+    } catch (err: any) {
+      console.error('[PerfilScreen] Error al actualizar perfil:', err?.message || err);
+      const msg = err?.response?.data?.message || 'No se pudo guardar la información en el servidor.';
+      setEditError(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Secciones del menú de configuración adaptadas
+  const dynamicSections: { title: string; items: SettingItem[] }[] = [
+    {
+      title: 'Mi Cuenta',
+      items: [
+        { icon: 'person-outline', label: 'Información personal', description: `Tel: ${userPhone}`, type: 'arrow' },
+        { icon: 'workspace-premium', label: 'Mi plan', description: `${userMembership} · Activo`, type: 'badge', badge: userMembership, badgeColor: Colors.primaryContainer },
+        { icon: 'notifications-none', label: 'Notificaciones', type: 'toggle', value: notificationsEnabled },
+        { icon: 'lock-outline', label: 'Seguridad', type: 'arrow' },
+      ],
+    },
+    {
+      title: 'FoodPass',
+      items: [
+        { icon: 'restaurant-menu', label: 'Preferencias de menú', type: 'arrow' },
+        { icon: 'place', label: 'Mis sedes favoritas', type: 'arrow' },
+        { icon: 'card-giftcard', label: 'Programa de puntos', type: 'badge', badge: `${userPoints} pts`, badgeColor: Colors.tertiaryContainer },
+      ],
+    },
+    {
+      title: 'Soporte',
+      items: [
+        { icon: 'help-outline', label: 'Centro de ayuda', type: 'arrow' },
+        { icon: 'chat-bubble-outline', label: 'Contactar soporte', type: 'arrow' },
+        { icon: 'info-outline', label: 'Versión 2.4.1', type: 'badge', badge: 'Actualizado', badgeColor: Colors.tertiaryContainer },
+      ],
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.topBar}>
         <Text style={styles.topBarTitle}>Mi Perfil</Text>
+        <TouchableOpacity
+          onPress={() => fetchProfile(true)}
+          style={styles.refreshIconBtn}
+          activeOpacity={0.7}
+        >
+          {isLoadingProfile ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <MaterialIcons name="refresh" size={22} color={Colors.primary} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => fetchProfile(true)}
+            colors={[Colors.primaryContainer]}
+            tintColor={Colors.primaryContainer}
+          />
+        }
       >
+        {/* TARJETA PRINCIPAL DEL PERFIL */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{userInitials}</Text>
@@ -132,17 +302,19 @@ const userPlan = userData?.plan
 
           <View style={styles.membershipChip}>
             <MaterialIcons name="workspace-premium" size={14} color={Colors.onPrimaryContainer} />
-            <Text style={styles.membershipText}>{userPlan}</Text>
+            <Text style={styles.membershipText}>{userPlanText}</Text>
           </View>
 
           <View style={styles.profileStats}>
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>128</Text>
+              <Text style={styles.profileStatNumber}>
+                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : 12}
+              </Text>
               <Text style={styles.profileStatLabel}>PEDIDOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>1,240</Text>
+              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString()}</Text>
               <Text style={styles.profileStatLabel}>PUNTOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
@@ -153,7 +325,8 @@ const userPlan = userData?.plan
           </View>
         </View>
 
-        {settingsSections.map((section) => (
+        {/* SECCIONES DE CONFIGURACIÓN */}
+        {dynamicSections.map((section) => (
           <View key={section.title} style={styles.settingsSection}>
             <Text style={styles.settingsSectionTitle}>{section.title.toUpperCase()}</Text>
 
@@ -162,95 +335,217 @@ const userPlan = userData?.plan
                 const isLast = index === section.items.length - 1;
 
                 if (item.type === 'toggle') {
-                    return (
-                        <View key={item.label} style={[styles.settingItem, isLast && styles.settingItemLast]}>
-                            <View style={styles.settingIcon}>
-                                <MaterialIcons name={item.icon} size={20} color={Colors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <SwitchField 
-                                    label={item.label}
-                                    value={notificationsEnabled}
-                                    onToggle={(val) => setNotificationsEnabled(val)}
-                                />
-                            </View>
-                        </View>
-                    );
-                }
-
-                return (
-                    <TouchableOpacity
-                      key={item.label}
-                      style={[styles.settingItem, isLast && styles.settingItemLast]}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        if (item.label === 'Centro de ayuda') {
-                          navigation.navigate('HelpCenter');
-                        } else if (item.label === 'Mis sedes favoritas') {
-                          setFavModalVisible(true);
-                        } else if (item.label === 'Seguridad') {
-                          navigation.navigate('Security');
-                        } else if (item.label === 'Programa de puntos') {
-                          setPointsModalVisible(true);
-                        } else if (item.label === 'Información personal') {
-                          setPersonalInfoModalVisible(true);
-                        } else if (item.label === 'Contactar soporte') {
-                          setChatVisible(true);
-                        } else if (item.label === 'Preferencias de menú') {
-                          setMenuPrefsVisible(true);
-                        }
-                      }}
-                    >
+                  return (
+                    <View key={item.label} style={[styles.settingItem, isLast && styles.settingItemLast]}>
                       <View style={styles.settingIcon}>
                         <MaterialIcons name={item.icon} size={20} color={Colors.primary} />
                       </View>
-    
-                      <View style={styles.settingText}>
-                        <Text style={styles.settingLabel}>{item.label}</Text>
-                        {item.description && (
-                          <Text style={styles.settingDescription}>{item.description}</Text>
-                        )}
+                      <View style={{ flex: 1 }}>
+                        <SwitchField
+                          label={item.label}
+                          value={notificationsEnabled}
+                          onToggle={(val: boolean) => setNotificationsEnabled(val)}
+                        />
                       </View>
-    
-                      {item.type === 'arrow' && (
-                        <MaterialIcons name="arrow-forward-ios" size={14} color={Colors.onSurfaceVariant} />
-                      )}
-                      {item.type === 'badge' && item.badge && (
-                        <View style={[styles.settingBadge, { backgroundColor: item.badgeColor }]}>
-                          <Text style={styles.settingBadgeText}>{item.badge}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                    </View>
                   );
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={[styles.settingItem, isLast && styles.settingItemLast]}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (item.label === 'Centro de ayuda') {
+                        navigation.navigate('HelpCenter');
+                      } else if (item.label === 'Mis sedes favoritas') {
+                        setFavModalVisible(true);
+                      } else if (item.label === 'Seguridad') {
+                        navigation.navigate('Security');
+                      } else if (item.label === 'Programa de puntos') {
+                        setPointsModalVisible(true);
+                      } else if (item.label === 'Información personal') {
+                        handleOpenEditModal();
+                      } else if (item.label === 'Contactar soporte') {
+                        setChatVisible(true);
+                      } else if (item.label === 'Preferencias de menú') {
+                        setMenuPrefsVisible(true);
+                      }
+                    }}
+                  >
+                    <View style={styles.settingIcon}>
+                      <MaterialIcons name={item.icon} size={20} color={Colors.primary} />
+                    </View>
+
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>{item.label}</Text>
+                      {item.description ? (
+                        <Text style={styles.settingDescription}>{item.description}</Text>
+                      ) : null}
+                    </View>
+
+                    {item.type === 'arrow' && (
+                      <MaterialIcons name="arrow-forward-ios" size={14} color={Colors.onSurfaceVariant} />
+                    )}
+                    {item.type === 'badge' && item.badge ? (
+                      <View style={[styles.settingBadge, { backgroundColor: item.badgeColor }]}>
+                        <Text style={styles.settingBadgeText}>{item.badge}</Text>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
               })}
             </View>
           </View>
         ))}
 
+        {/* BOTÓN CERRAR SESIÓN */}
         <TouchableOpacity style={styles.logoutButton} activeOpacity={0.8} onPress={() => logout()}>
           <MaterialIcons name="logout" size={20} color={Colors.error} />
           <Text style={styles.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 28 }} />
       </ScrollView>
 
-      {/* Modal del chat de soporte */}
+      {/* MODAL DE INFORMACIÓN PERSONAL (T11 - EDICIÓN Y GESTIÓN DE PERFIL) */}
       <Modal
-        visible={chatVisible}
         animationType="slide"
-        onRequestClose={() => setChatVisible(false)}
+        transparent={true}
+        visible={personalInfoModalVisible}
+        onRequestClose={() => {
+          if (!isSaving) setPersonalInfoModalVisible(false);
+        }}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.editModalContent}>
+            <View style={styles.editModalHeader}>
+              <View style={styles.editModalHeaderLeft}>
+                <View style={styles.editIconWrap}>
+                  <MaterialIcons name="person" size={22} color={Colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Información Personal</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPersonalInfoModalVisible(false)}
+                disabled={isSaving}
+                style={styles.modalCloseIcon}
+              >
+                <MaterialIcons name="close" size={22} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.editModalSubtitle}>
+              Actualiza tus datos de contacto registrados en FoodPass.
+            </Text>
+
+            {/* Banner de Mensaje de Error */}
+            {editError ? (
+              <View style={styles.alertBoxError}>
+                <MaterialIcons name="error-outline" size={18} color={Colors.error} />
+                <Text style={styles.alertTextError}>{editError}</Text>
+              </View>
+            ) : null}
+
+            {/* Banner de Mensaje de Éxito */}
+            {editSuccess ? (
+              <View style={styles.alertBoxSuccess}>
+                <MaterialIcons name="check-circle" size={18} color={Colors.tertiary} />
+                <Text style={styles.alertTextSuccess}>{editSuccess}</Text>
+              </View>
+            ) : null}
+
+            {/* Formulario de Edición */}
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>NOMBRE COMPLETO *</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="badge" size={20} color={Colors.onSurfaceVariant} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.formInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Tu nombre y apellido"
+                  placeholderTextColor="#999"
+                  editable={!isSaving}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>TELÉFONO DE CONTACTO</Text>
+              <View style={styles.inputWrap}>
+                <MaterialIcons name="phone" size={20} color={Colors.onSurfaceVariant} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.formInput}
+                  value={editTelefono}
+                  onChangeText={setEditTelefono}
+                  placeholder="Ej: +57 300 1234567"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  editable={!isSaving}
+                />
+              </View>
+            </View>
+
+            {/* Correo Electrónico (Protegido - No editable) */}
+            <View style={styles.formGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.inputLabel}>CORREO ELECTRÓNICO (PROTEGIDO)</Text>
+                <MaterialIcons name="lock" size={12} color="#888" />
+              </View>
+              <View style={[styles.inputWrap, styles.inputDisabled]}>
+                <MaterialIcons name="email" size={20} color="#888" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.formInput, { color: '#888' }]}
+                  value={userEmail}
+                  editable={false}
+                />
+              </View>
+            </View>
+
+            {/* Botones de Acción */}
+            <View style={styles.editButtonsRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setPersonalInfoModalVisible(false)}
+                disabled={isSaving}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveProfile}
+                disabled={isSaving}
+                activeOpacity={0.85}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="save" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>Guardar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal del chat de soporte */}
+      <Modal visible={chatVisible} animationType="slide" onRequestClose={() => setChatVisible(false)}>
         <SoporteChatScreen onClose={() => setChatVisible(false)} />
       </Modal>
 
       {/* MODAL DE SEDES FAVORITAS */}
-      <FavoriteLocationsModal 
-        visible={favModalVisible} 
-        onClose={() => setFavModalVisible(false)} 
-      />
+      <FavoriteLocationsModal visible={favModalVisible} onClose={() => setFavModalVisible(false)} />
 
-      {/* ===== MODAL PARA PROGRAMA DE PUNTOS ===== */}
+      {/* MODAL PROGRAMA DE PUNTOS */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -275,54 +570,28 @@ const userPlan = userData?.plan
                   <Text style={styles.modalOptionTitle}>{reward.title}</Text>
                   <Text style={styles.modalOptionDesc}>{reward.desc}</Text>
                 </View>
-                <MaterialIcons 
-                  name={selectedReward === reward.id ? 'check-box' : 'check-box-outline-blank'} 
-                  size={24} 
-                  color={selectedReward === reward.id ? Colors.primary : Colors.outlineVariant} 
+                <MaterialIcons
+                  name={selectedReward === reward.id ? 'check-box' : 'check-box-outline-blank'}
+                  size={24}
+                  color={selectedReward === reward.id ? Colors.primary : Colors.outlineVariant}
                 />
               </TouchableOpacity>
             ))}
 
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setPointsModalVisible(false)}
-            >
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPointsModalVisible(false)}>
               <Text style={styles.modalCloseButtonText}>Cerrar</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* PERSONAL INFO MODAL */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={personalInfoModalVisible}
-        onRequestClose={() => setPersonalInfoModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Información personal</Text>
-            <Text style={styles.modalOptionTitle}>Juan Perez</Text>
-            <Text style={styles.modalOptionDesc}>Apto para ayuda alimenticia</Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setPersonalInfoModalVisible(false)}
-            >
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ===== MODAL PREFERENCIAS DE MENÚ ===== */}
+      {/* MODAL PREFERENCIAS DE MENÚ */}
       <Modal
         animationType="slide"
         visible={menuPrefsVisible}
         onRequestClose={() => setMenuPrefsVisible(false)}
       >
         <View style={menuStyles.container}>
-          {/* Header del modal */}
           <View style={menuStyles.header}>
             <TouchableOpacity onPress={() => setMenuPrefsVisible(false)} style={menuStyles.backBtn}>
               <MaterialIcons name="arrow-back-ios" size={20} color={Colors.primary} />
@@ -331,7 +600,6 @@ const userPlan = userData?.plan
             <View style={{ width: 44 }} />
           </View>
 
-          {/* Lista de platos */}
           <FlatList
             data={menuPrefsItems}
             keyExtractor={(item) => item.id}
@@ -381,10 +649,8 @@ const userPlan = userData?.plan
                     style={menuStyles.popupAddBtn}
                     activeOpacity={0.8}
                     onPress={() => {
-                      if (selectedMenuItem) {
-                        addItem(selectedMenuItem);
-                        setSelectedMenuItem(null);
-                      }
+                      addItem(selectedMenuItem as any);
+                      setSelectedMenuItem(null);
                     }}
                   >
                     <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
@@ -402,41 +668,127 @@ const userPlan = userData?.plan
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.surface },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'rgba(255,255,255,0.85)', elevation: 3 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    elevation: 3,
+  },
   topBarTitle: { fontSize: 20, fontWeight: '800', color: Colors.onBackground, letterSpacing: -0.3 },
-  topBarAction: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  refreshIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   scroll: { flex: 1 },
-  profileCard: { margin: 20, backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxxl, padding: 28, alignItems: 'center' },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginBottom: 14, position: 'relative' },
+  profileCard: {
+    margin: 20,
+    backgroundColor: Colors.inverseSurface,
+    borderRadius: BorderRadius.xxxl,
+    padding: 28,
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    position: 'relative',
+  },
   avatarText: { fontSize: 28, fontWeight: '800', color: Colors.onPrimaryContainer },
-  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: Colors.surfaceContainerLowest, borderRadius: 12, padding: 2 },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 12,
+    padding: 2,
+  },
   profileName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
   profileEmail: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 14 },
-  membershipChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primaryContainer, paddingHorizontal: 14, paddingVertical: 6, borderRadius: BorderRadius.full, marginBottom: 24 },
+  membershipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primaryContainer,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    marginBottom: 24,
+  },
   membershipText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimaryContainer },
-  profileStats: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: BorderRadius.xl, padding: 16, width: '100%', justifyContent: 'space-around' },
+  profileStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    width: '100%',
+    justifyContent: 'space-around',
+  },
   profileStat: { alignItems: 'center' },
   profileStatNumber: { fontSize: 20, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   profileStatLabel: { fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginTop: 2 },
   profileStatDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.15)' },
   settingsSection: { marginBottom: 8, paddingHorizontal: 20 },
-  settingsSectionTitle: { fontSize: 10, fontWeight: '700', color: Colors.onSurfaceVariant, letterSpacing: 1.5, marginBottom: 8, paddingLeft: 4 },
+  settingsSectionTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    paddingLeft: 4,
+  },
   settingsGroup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, overflow: 'hidden' },
-  settingItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.surfaceContainerLow },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceContainerLow,
+  },
   settingItemLast: { borderBottomWidth: 0 },
-  settingIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  settingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
   settingText: { flex: 1 },
   settingLabel: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
   settingDescription: { fontSize: 12, color: Colors.onSurfaceVariant, marginTop: 1 },
   settingBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full },
   settingBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.onPrimaryContainer, letterSpacing: 0.5 },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginHorizontal: 20, marginTop: 8, paddingVertical: 16, backgroundColor: Colors.errorContainer, borderRadius: BorderRadius.xl },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 8,
+    paddingVertical: 16,
+    backgroundColor: Colors.errorContainer,
+    borderRadius: BorderRadius.xl,
+  },
   logoutText: { fontSize: 15, fontWeight: '700', color: Colors.error },
-  // ===== ESTILOS DEL MODAL =====
+
+  // ESTILOS DE MODALES GENERALES
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end', 
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: Colors.surface,
@@ -445,13 +797,7 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.onSurface,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,17 +814,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  modalOptionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.onSurface,
-    marginBottom: 2,
-  },
-  modalOptionDesc: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 16,
-  },
+  modalOptionTitle: { fontSize: 15, fontWeight: '700', color: Colors.onSurface, marginBottom: 2 },
+  modalOptionDesc: { fontSize: 12, color: Colors.onSurfaceVariant, lineHeight: 16 },
   modalCloseButton: {
     marginTop: 20,
     paddingVertical: 14,
@@ -486,19 +823,137 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     alignItems: 'center',
   },
-  modalCloseButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  modalCloseButtonText: { fontSize: 16, fontWeight: '600', color: Colors.onSurfaceVariant },
+
+  // ESTILOS DE MODAL DE EDICIÓN DE PERFIL (T11)
+  editModalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.xxxl,
+    borderTopRightRadius: BorderRadius.xxxl,
+    padding: 24,
+    paddingBottom: 36,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  editModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  editIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalSubtitle: {
+    fontSize: 13,
     color: Colors.onSurfaceVariant,
+    marginBottom: 18,
+  },
+  alertBoxError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.errorContainer,
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    marginBottom: 14,
+  },
+  alertTextError: { color: Colors.error, fontSize: 12, fontWeight: '600', flex: 1 },
+  alertBoxSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.tertiaryContainer,
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    marginBottom: 14,
+  },
+  alertTextSuccess: { color: Colors.onTertiaryContainer, fontSize: 12, fontWeight: '600', flex: 1 },
+  formGroup: { marginBottom: 14 },
+  fieldLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 1,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  inputDisabled: {
+    backgroundColor: '#F3F3F3',
+    borderColor: '#E0E0E0',
+  },
+  inputIcon: { marginRight: 8 },
+  formInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.onBackground,
+    fontWeight: '500',
+  },
+  editButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+  },
+  saveBtn: {
+    flex: 1.5,
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    elevation: 2,
+  },
+  saveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 
-// ===== ESTILOS PARA PREFERENCIAS DE MENÚ =====
 const menuStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
+  container: { flex: 1, backgroundColor: Colors.surface },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -516,11 +971,7 @@ const menuStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.onSurface,
-  },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
   card: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceContainerLowest,
@@ -528,117 +979,22 @@ const menuStyles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
   },
-  cardImage: {
-    width: 110,
-    height: 110,
-  },
-  cardContent: {
-    flex: 1,
-    padding: 14,
-    justifyContent: 'space-between',
-  },
-  cardName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.onSurface,
-  },
-  cardDesc: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 16,
-    marginTop: 4,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  cardPrice: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.primaryContainer,
-  },
-  cardBadge: {
-    backgroundColor: Colors.surfaceContainerLow,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-  },
-  cardBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.onSurfaceVariant,
-  },
-  // Popup detalle
-  popupOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  popup: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: BorderRadius.xxl,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    position: 'relative',
-  },
-  popupClose: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  popupImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: BorderRadius.xl,
-    marginBottom: 16,
-  },
-  popupName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.onSurface,
-    marginBottom: 8,
-  },
-  popupDesc: {
-    fontSize: 14,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  popupPrice: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.primaryContainer,
-    marginBottom: 20,
-  },
-  popupAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryContainer,
-    paddingVertical: 14,
-    borderRadius: BorderRadius.xl,
-  },
-  popupAddText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.onPrimaryContainer,
-  },
+  cardImage: { width: 110, height: 110 },
+  cardContent: { flex: 1, padding: 14, justifyContent: 'space-between' },
+  cardName: { fontSize: 15, fontWeight: '700', color: Colors.onSurface },
+  cardDesc: { fontSize: 12, color: Colors.onSurfaceVariant, lineHeight: 16, marginTop: 4 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  cardPrice: { fontSize: 18, fontWeight: '800', color: Colors.primaryContainer },
+  cardBadge: { backgroundColor: Colors.surfaceContainerLow, paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
+  cardBadgeText: { fontSize: 10, fontWeight: '600', color: Colors.onSurfaceVariant },
+  popupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+  popup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 24, width: '100%', maxWidth: 360, position: 'relative' },
+  popupClose: { position: 'absolute', top: 12, right: 12, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  popupImage: { width: '100%', height: 180, borderRadius: BorderRadius.xl, marginBottom: 16 },
+  popupName: { fontSize: 20, fontWeight: '800', color: Colors.onSurface, marginBottom: 8 },
+  popupDesc: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 16 },
+  popupPrice: { fontSize: 28, fontWeight: '800', color: Colors.primaryContainer, marginBottom: 20 },
+  popupAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primaryContainer, paddingVertical: 14, borderRadius: BorderRadius.xl },
+  popupAddText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimaryContainer },
 });

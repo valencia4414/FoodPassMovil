@@ -63,7 +63,7 @@ export default function PagosScreen() {
         <View style={styles.planSummary}>
           <View style={styles.planSummaryLeft}>
             <View style={styles.planBadge}>
-              <Text style={styles.planBadgeText}>PLAN PREMIUM</Text>
+              {/* <Text style={styles.planBadgeText}>PLAN PREMIUM</Text> */}
             </View>
             <Text style={styles.planName}>FoodPass Premium</Text>
             <Text style={styles.planSubtitle}>22 almuerzos / mes</Text>
