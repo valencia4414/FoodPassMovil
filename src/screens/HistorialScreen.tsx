@@ -10,14 +10,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-
-  TextInput, // <-- Importado para la búsqueda
-  Modal,
-
   TextInput,
+  Modal,
   ActivityIndicator,
   RefreshControl,
-
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -26,7 +22,9 @@ import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
 import PedidoStatusTracker from '../components/PedidoStatusTracker';
 import { apiClient } from '../services/apiClient';
+
 const filters = ['Todos', 'Últimos 30 días', 'Este mes', 'Pasados'];
+
 export interface OrderItem {
   id: number;
   producto_id: number;
@@ -133,7 +131,6 @@ export default function HistorialScreen() {
         matchesTime = daysDiff > 30;
       }
 
-      // Buscar por nombre de productos, id de pedido o estado
       const q = searchText.toLowerCase();
       const matchesId = `pedido #${item.id}`.toLowerCase().includes(q) || `#${item.id}`.includes(q);
       const matchesEstado = item.estado ? item.estado.toLowerCase().includes(q) : false;
@@ -147,56 +144,30 @@ export default function HistorialScreen() {
     });
   }, [pedidos, activeFilter, searchText]);
 
-  // Estadísticas calculadas dinámicamente con los pedidos reales
+  // Estadísticas calculadas dinámicamente
   const stats = useMemo(() => {
     const totalPedidos = pedidos.length;
     const totalGastado = pedidos.reduce((acc, p) => acc + (Number(p.total) || 0), 0);
-    // Estimación de ahorro basada en beneficios (10% promedio de descuento por orden)
     const totalAhorro = Math.round(totalGastado * 0.1);
     const ordersLeft = Math.max(1, 5 - (totalPedidos % 5));
     return { totalPedidos, totalAhorro, ordersLeft };
-
-  }, [filteredTransactions]);
-
-  const renderTransaction = (item: Transaction) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.transactionCard}
-      activeOpacity={0.8}
-      onPress={() => setSelectedOrderId(item.id)}
-    >
-      <View style={styles.transactionIconWrap}><MaterialIcons name="restaurant" size={22} color={Colors.primary} /></View>
-      <View style={styles.transactionInfo}>
-        <Text style={styles.transactionName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.transactionRestaurant} numberOfLines={1}>{item.restaurant}</Text>
-        <Text style={styles.transactionDate}>{formatTxDate(item.date)}</Text>
-      </View>
-      <View style={styles.transactionRight}>
-        <Text style={styles.transactionAmount}>{`-$${item.amount.toFixed(2)}`}</Text>
-        <View style={[styles.statusBadge, item.status === 'ok' ? styles.statusBadgeOk : styles.statusBadgePending]}>
-          <Text style={[styles.statusBadgeText, item.status === 'ok' ? styles.statusTextOk : styles.statusTextPending]}>
-            {item.status === 'ok' ? 'OK' : 'PEND'}
-          </Text>
   }, [pedidos]);
 
   // Renderizado individual de una orden
   const renderPedidoItem = (item: Pedido) => {
     const orderDate = new Date(item.fecha_pedido);
     const hasItems = item.items && item.items.length > 0;
-    
-    // Nombre principal a mostrar
+
     const mainTitle = hasItems
       ? item.items.length === 1
         ? item.items[0].nombre
         : `${item.items[0].nombre} +${item.items.length - 1}`
       : `Pedido #${item.id}`;
 
-    // Subtítulo con descripción de los productos
     const subtitle = hasItems
       ? item.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(', ')
       : 'FoodPass — Sede Principal';
 
-    // Determinar estilo de badge según estado
     const estadoLower = (item.estado || '').toLowerCase();
     const isOk = estadoLower === 'entregado' || estadoLower === 'listo';
     const isCanceled = estadoLower === 'cancelado';
@@ -214,7 +185,12 @@ export default function HistorialScreen() {
     }
 
     return (
-      <TouchableOpacity key={item.id} style={styles.transactionCard} activeOpacity={0.8}>
+      <TouchableOpacity
+        key={item.id}
+        style={styles.transactionCard}
+        activeOpacity={0.8}
+        onPress={() => setSelectedOrderId(String(item.id))}
+      >
         <View style={styles.transactionIconWrap}>
           <MaterialIcons name="restaurant" size={22} color={Colors.primary} />
         </View>
@@ -237,7 +213,6 @@ export default function HistorialScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* SECCIÓN CABECERA INTERACTIVA */}
       <View style={styles.headerWrapper}>
         <Header title="Historial" showSearch />
         {!isSearching && (
@@ -277,7 +252,6 @@ export default function HistorialScreen() {
           />
         }
       >
-        {/* RESUMEN ESTADÍSTICO */}
         <View style={styles.statsContainer}>
           <View style={styles.heroStatCard}>
             <Text style={styles.heroStatTitle}>Trayectoria Gastronómica</Text>
@@ -307,7 +281,6 @@ export default function HistorialScreen() {
           </View>
         </View>
 
-        {/* FILTROS TEMPORALES */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -327,7 +300,6 @@ export default function HistorialScreen() {
           ))}
         </ScrollView>
 
-        {/* LISTADO DE PEDIDOS */}
         <View style={styles.listSection}>
           <View style={styles.listHeaderRow}>
             <Text style={styles.listTitle}>Historial Detallado</Text>
@@ -336,7 +308,6 @@ export default function HistorialScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ESTADO DE CARGA */}
           {isLoading && !isRefreshing && (
             <View style={styles.stateContainer}>
               <ActivityIndicator size="large" color={Colors.primaryContainer} />
@@ -344,7 +315,6 @@ export default function HistorialScreen() {
             </View>
           )}
 
-          {/* ESTADO DE ERROR */}
           {!isLoading && errorMessage && (
             <View style={styles.stateContainer}>
               <MaterialIcons name="error-outline" size={44} color={Colors.error} />
@@ -357,7 +327,6 @@ export default function HistorialScreen() {
             </View>
           )}
 
-          {/* ESTADO VACÍO (SIN PEDIDOS O SIN COINCIDENCIAS) */}
           {!isLoading && !errorMessage && filteredPedidos.length === 0 && (
             <View style={styles.stateContainer}>
               <MaterialIcons name="receipt-long" size={44} color={Colors.outline} />
@@ -372,7 +341,6 @@ export default function HistorialScreen() {
             </View>
           )}
 
-          {/* LISTA DE PEDIDOS REALES */}
           {!isLoading && !errorMessage && filteredPedidos.length > 0 && (
             filteredPedidos.map((pedido) => renderPedidoItem(pedido))
           )}
@@ -381,7 +349,6 @@ export default function HistorialScreen() {
         <View style={{ height: 28 }} />
       </ScrollView>
 
-      {/* MODAL DE SEGUIMIENTO EN TIEMPO REAL (T13 - RFM14) */}
       {selectedOrderId && (
         <Modal
           visible={Boolean(selectedOrderId)}
@@ -415,34 +382,10 @@ export default function HistorialScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
-
-  // ESTILOS DE BÚSQUEDA INTERACTIVA
   headerWrapper: { position: 'relative', zIndex: 100 },
-  searchActivator: {
-    position: 'absolute',
-    right: 85,
-    top: 10,
-    width: 45,
-    height: 45,
-    borderRadius: 22,
-    zIndex: 101,
-  },
-  fullSearchBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    height: 70,
-    zIndex: 102,
-    elevation: 4,
-  },
+  searchActivator: { position: 'absolute', right: 85, top: 10, width: 45, height: 45, borderRadius: 22, zIndex: 101 },
+  fullSearchBar: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: 70, zIndex: 102, elevation: 4 },
   inputField: { flex: 1, marginLeft: 15, fontSize: 15, color: '#000', fontWeight: '500' },
-
   scroll: { flex: 1 },
   statsContainer: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 20, marginBottom: 16 },
   heroStatCard: { flex: 2, backgroundColor: '#FFF', borderRadius: BorderRadius.xxl, padding: 16, elevation: 3 },
@@ -452,23 +395,8 @@ const styles = StyleSheet.create({
   heroStatLabel: { fontSize: 8, fontWeight: '700', color: '#888' },
   heroStatNumber: { fontSize: 24, fontWeight: '800' },
   heroStatDivider: { width: 1, height: 30, backgroundColor: '#EEE', marginHorizontal: 10 },
-  eliteCard: {
-    flex: 0.8,
-    backgroundColor: Colors.inverseSurface,
-    borderRadius: BorderRadius.xxl,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eliteIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primaryContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
+  eliteCard: { flex: 0.8, backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxl, padding: 10, alignItems: 'center', justifyContent: 'center' },
+  eliteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
   eliteTitle: { fontSize: 12, fontWeight: '700', color: '#fff' },
   eliteSubtitle: { fontSize: 9, color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
   filtersScroll: { maxHeight: 48, marginBottom: 8 },
@@ -482,15 +410,7 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: 16, fontWeight: '700' },
   refreshButton: { padding: 4 },
   transactionCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  transactionIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
+  transactionIconWrap: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   transactionInfo: { flex: 1, paddingRight: 8 },
   transactionName: { fontSize: 14, fontWeight: '600', color: Colors.onBackground },
   transactionRestaurant: { fontSize: 11, color: '#888', marginTop: 2 },
@@ -504,60 +424,17 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontSize: 9, fontWeight: '700' },
   statusTextOk: { color: Colors.onTertiaryContainer },
   statusTextPending: { color: Colors.onPrimaryContainer },
-
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyText: { fontSize: 14, color: '#888', fontWeight: '600' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(18, 31, 5, 0.65)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: BorderRadius.xxl,
-    padding: 16,
-    maxHeight: '85%',
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceContainerHigh,
-    marginBottom: 8,
-  },
-  modalHeaderTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalHeaderTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.onBackground,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-
   statusTextCanceled: { color: Colors.error },
-
-  // ESTILOS PARA ESTADOS DE CARGA, ERROR Y VACÍO
   stateContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 36, gap: 8 },
   stateText: { fontSize: 13, color: '#888', textAlign: 'center', maxWidth: 280 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.onBackground, marginTop: 4 },
   errorTitle: { fontSize: 15, fontWeight: '700', color: Colors.error, marginTop: 4 },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.lg,
-    marginTop: 8,
-  },
+  retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: BorderRadius.lg, marginTop: 8 },
   retryButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(18, 31, 5, 0.65)', justifyContent: 'center', padding: 16 },
+  modalContent: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 16, maxHeight: '85%' },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.surfaceContainerHigh, marginBottom: 8 },
+  modalHeaderTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalHeaderTitle: { fontSize: 16, fontWeight: '800', color: Colors.onBackground },
+  modalCloseBtn: { padding: 4 },
 });

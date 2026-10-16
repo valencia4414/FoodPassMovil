@@ -3,7 +3,7 @@
 // Pantalla de perfil del usuario (T11 - RFM12).
 // Conectada dinámicamente con GET /api/users/me y PUT /api/users/me.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
@@ -73,28 +72,17 @@ export default function PerfilScreen() {
   // Navegación y contextos
   const navigation = useNavigation<any>();
 
-const { logout, userData } = useAuth();
-const { addItem } = useCart();
-
-const userName = userData?.name || 'Carlos Mendoza';
-const userEmail = userData?.email || 'carlos@foodpass.com';
-
-const userInitials = userName
-  .split(' ')
-  .filter(Boolean)
-  .map((w) => w[0])
-  .slice(0, 2)
-  .join('')
-  .toUpperCase() || 'CM';
-
-const userPlan = userData?.plan
-  ? `${userData.plan} Member`
-  : 'Premium Member';
-
   const { logout, userData, updateUser } = useAuth();
   const { addItem } = useCart();
 
-  // Estados de datos reales del perfil (T11 - RFM12)
+  // Refs para usar siempre el valor más reciente sin recrear fetchProfile
+  // (evita el bucle infinito de peticiones a /users/me)
+  const updateUserRef = useRef<any>(updateUser);
+  const userDataRef = useRef<any>(userData);
+  updateUserRef.current = updateUser;
+  userDataRef.current = userData;
+
+  // 1. Estados de datos reales del perfil
   const [profileData, setProfileData] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -107,6 +95,25 @@ const userPlan = userData?.plan
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
+  // 2. Variables calculadas de visualización (declaradas UNA sola vez)
+  const userName: string = profileData?.name || userData?.name || 'Carlos Mendoza';
+  const userEmail: string = profileData?.email || userData?.email || 'carlos@foodpass.com';
+  const userPhone: string = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
+  const userPoints: number = Number(profileData?.puntos_fp ?? 1240) || 0;
+  const userMembership: string =
+    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'Premium';
+
+  const userInitials =
+    userName
+      .split(' ')
+      .filter(Boolean)
+      .map((w: string) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'CM';
+
+  const userPlanText = `${userMembership} Member`;
+
   // Consultar datos reales del usuario desde el backend (GET /api/users/me)
   const fetchProfile = useCallback(async (refresh = false) => {
     if (refresh) setIsRefreshing(true);
@@ -117,35 +124,29 @@ const userPlan = userData?.plan
       if (response.data && response.data.success) {
         const u = response.data.data;
         setProfileData(u);
-        // Sincronizar contexto global si los datos difieren
-        if (updateUser && u.name) {
-          updateUser({
+        // Sincronizar contexto global
+        if (u.name && updateUserRef.current) {
+          await updateUserRef.current({
             name: u.name,
             email: u.email,
             role: u.role,
             telefono: u.telefono,
             membresia: u.membresia,
             puntos_fp: u.puntos_fp,
-          });
+          } as any);
         }
       }
     } catch (err: any) {
       console.warn('[PerfilScreen] No se pudo cargar perfil desde API:', err?.message || err);
-      // Fallback a los datos actuales de sesión
-      if (userData && !profileData) {
-        setProfileData(userData);
-      }
+      // Fallback a los datos de sesión solo si aún no hay datos
+      setProfileData((prev: any) => prev ?? userDataRef.current ?? null);
     } finally {
       setIsLoadingProfile(false);
       setIsRefreshing(false);
     }
-  }, [userData, profileData, updateUser]);
+  }, []);
 
-  // Cargar perfil al inicio y en cada enfoque
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
-
+  // useFocusEffect también se ejecuta al montar la pantalla
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
@@ -202,12 +203,12 @@ const userPlan = userData?.plan
         // 1. Actualizar estado local de la pantalla
         setProfileData(updated);
 
-        // 2. Actualizar estado global en AuthContext (actualiza Header, Dashboard, etc.)
-        if (updateUser) {
-          await updateUser({
+        // 2. Actualizar estado global en AuthContext (Header, Dashboard, etc.)
+        if (updateUserRef.current) {
+          await updateUserRef.current({
             name: updated.name,
             telefono: updated.telefono,
-          });
+          } as any);
         }
 
         setEditSuccess('¡Perfil actualizado correctamente!');
@@ -228,23 +229,6 @@ const userPlan = userData?.plan
       setIsSaving(false);
     }
   };
-
-  // Variables calculadas de visualización
-  const userName = profileData?.name || userData?.name || 'Usuario';
-  const userEmail = profileData?.email || userData?.email || 'usuario@foodpass.com';
-  const userPhone = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
-  const userPoints = profileData?.puntos_fp !== undefined ? profileData.puntos_fp : 1240;
-  const userMembership = profileData?.membresia || (userData as any)?.membresia || userData?.plan || 'Premium';
-
-  const userInitials = userName
-    .split(' ')
-    .filter(Boolean)
-    .map((w: string) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'FP';
-
-  const userPlanText = `${userMembership} Member`;
 
   // Secciones del menú de configuración adaptadas
   const dynamicSections: { title: string; items: SettingItem[] }[] = [
@@ -275,7 +259,6 @@ const userPlan = userData?.plan
     },
   ];
 
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.topBar}>
@@ -285,7 +268,11 @@ const userPlan = userData?.plan
           style={styles.refreshIconBtn}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="refresh" size={22} color={Colors.primary} />
+          {isLoadingProfile ? (
+            <ActivityIndicator size="small" color={Colors.primary} />
+          ) : (
+            <MaterialIcons name="refresh" size={22} color={Colors.primary} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -357,7 +344,7 @@ const userPlan = userData?.plan
                         <SwitchField
                           label={item.label}
                           value={notificationsEnabled}
-                          onToggle={(val) => setNotificationsEnabled(val)}
+                          onToggle={(val: boolean) => setNotificationsEnabled(val)}
                         />
                       </View>
                     </View>
@@ -393,19 +380,19 @@ const userPlan = userData?.plan
 
                     <View style={styles.settingText}>
                       <Text style={styles.settingLabel}>{item.label}</Text>
-                      {item.description && (
+                      {item.description ? (
                         <Text style={styles.settingDescription}>{item.description}</Text>
-                      )}
+                      ) : null}
                     </View>
 
                     {item.type === 'arrow' && (
                       <MaterialIcons name="arrow-forward-ios" size={14} color={Colors.onSurfaceVariant} />
                     )}
-                    {item.type === 'badge' && item.badge && (
+                    {item.type === 'badge' && item.badge ? (
                       <View style={[styles.settingBadge, { backgroundColor: item.badgeColor }]}>
                         <Text style={styles.settingBadgeText}>{item.badge}</Text>
                       </View>
-                    )}
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -457,20 +444,20 @@ const userPlan = userData?.plan
             </Text>
 
             {/* Banner de Mensaje de Error */}
-            {editError && (
+            {editError ? (
               <View style={styles.alertBoxError}>
                 <MaterialIcons name="error-outline" size={18} color={Colors.error} />
                 <Text style={styles.alertTextError}>{editError}</Text>
               </View>
-            )}
+            ) : null}
 
             {/* Banner de Mensaje de Éxito */}
-            {editSuccess && (
+            {editSuccess ? (
               <View style={styles.alertBoxSuccess}>
                 <MaterialIcons name="check-circle" size={18} color={Colors.tertiary} />
                 <Text style={styles.alertTextSuccess}>{editSuccess}</Text>
               </View>
-            )}
+            ) : null}
 
             {/* Formulario de Edición */}
             <View style={styles.formGroup}>
@@ -662,10 +649,8 @@ const userPlan = userData?.plan
                     style={menuStyles.popupAddBtn}
                     activeOpacity={0.8}
                     onPress={() => {
-                      if (selectedMenuItem) {
-                        addItem(selectedMenuItem);
-                        setSelectedMenuItem(null);
-                      }
+                      addItem(selectedMenuItem as any);
+                      setSelectedMenuItem(null);
                     }}
                   >
                     <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
