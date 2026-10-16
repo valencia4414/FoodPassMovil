@@ -174,6 +174,7 @@ export default function AppNavigator() {
             <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
           </>
         ) : (
+
           <>
             <Stack.Screen name="Login">
               {({ navigation, route }: any) => (
@@ -233,6 +234,27 @@ export default function AppNavigator() {
               )}
             </Stack.Screen>
           </>
+          // Si no, mostramos el login y le pasamos la función para autenticarse.
+          // La función handleLogin simula la respuesta del API y llama al login del contexto.
+          <Stack.Screen name="Login">
+            {() => (
+              <LoginScreen
+                onLogin={async (enteredEmail?: string) => {
+                  // Token JWT válido firmado con el JWT_SECRET del backend para desarrollo e integración
+                  const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJjYXJsb3NAc295LnNlbmEuZWR1LmNvIiwicm9sZSI6ImJlbmVmaWNpYXJpbyIsImlhdCI6MTc5MjAzMDc2NiwiZXhwIjoxNzk0NjIyNzY2fQ.aJLgcFM3RkLzOT4N4XiuiEha9iP0dKo8KQ1ZSZ_O4xQ';
+                  const validUser = {
+                    id: 4,
+                    name: 'Carlos Aprendiz',
+                    email: enteredEmail && enteredEmail.includes('@') ? enteredEmail.trim() : 'carlos@soy.sena.edu.co',
+                    role: 'beneficiario',
+                    plan: 'Premium',
+                  };
+
+                  await login(validToken, validUser);
+                }}
+              />
+            )}
+          </Stack.Screen>
         )}
       </Stack.Navigator>
     </NavigationContainer>
