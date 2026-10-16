@@ -10,19 +10,23 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+
+  TextInput, // <-- Importado para la búsqueda
+  Modal,
+
   TextInput,
   ActivityIndicator,
   RefreshControl,
+
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
+import PedidoStatusTracker from '../components/PedidoStatusTracker';
 import { apiClient } from '../services/apiClient';
-
 const filters = ['Todos', 'Últimos 30 días', 'Este mes', 'Pasados'];
-
 export interface OrderItem {
   id: number;
   producto_id: number;
@@ -62,6 +66,7 @@ export default function HistorialScreen() {
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // Estados para datos dinámicos desde la API (T10 - RFM07)
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -150,6 +155,28 @@ export default function HistorialScreen() {
     const totalAhorro = Math.round(totalGastado * 0.1);
     const ordersLeft = Math.max(1, 5 - (totalPedidos % 5));
     return { totalPedidos, totalAhorro, ordersLeft };
+
+  }, [filteredTransactions]);
+
+  const renderTransaction = (item: Transaction) => (
+    <TouchableOpacity
+      key={item.id}
+      style={styles.transactionCard}
+      activeOpacity={0.8}
+      onPress={() => setSelectedOrderId(item.id)}
+    >
+      <View style={styles.transactionIconWrap}><MaterialIcons name="restaurant" size={22} color={Colors.primary} /></View>
+      <View style={styles.transactionInfo}>
+        <Text style={styles.transactionName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.transactionRestaurant} numberOfLines={1}>{item.restaurant}</Text>
+        <Text style={styles.transactionDate}>{formatTxDate(item.date)}</Text>
+      </View>
+      <View style={styles.transactionRight}>
+        <Text style={styles.transactionAmount}>{`-$${item.amount.toFixed(2)}`}</Text>
+        <View style={[styles.statusBadge, item.status === 'ok' ? styles.statusBadgeOk : styles.statusBadgePending]}>
+          <Text style={[styles.statusBadgeText, item.status === 'ok' ? styles.statusTextOk : styles.statusTextPending]}>
+            {item.status === 'ok' ? 'OK' : 'PEND'}
+          </Text>
   }, [pedidos]);
 
   // Renderizado individual de una orden
@@ -353,6 +380,35 @@ export default function HistorialScreen() {
 
         <View style={{ height: 28 }} />
       </ScrollView>
+
+      {/* MODAL DE SEGUIMIENTO EN TIEMPO REAL (T13 - RFM14) */}
+      {selectedOrderId && (
+        <Modal
+          visible={Boolean(selectedOrderId)}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSelectedOrderId(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeaderRow}>
+                <View style={styles.modalHeaderTitleWrap}>
+                  <MaterialIcons name="track-changes" size={22} color={Colors.primary} />
+                  <Text style={styles.modalHeaderTitle}>Seguimiento en Vivo</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedOrderId(null)}
+                  style={styles.modalCloseBtn}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <MaterialIcons name="close" size={24} color={Colors.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+              <PedidoStatusTracker initialOrderId={selectedOrderId} compact={true} />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -448,6 +504,44 @@ const styles = StyleSheet.create({
   statusBadgeText: { fontSize: 9, fontWeight: '700' },
   statusTextOk: { color: Colors.onTertiaryContainer },
   statusTextPending: { color: Colors.onPrimaryContainer },
+
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+  emptyText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 31, 5, 0.65)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xxl,
+    padding: 16,
+    maxHeight: '85%',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.surfaceContainerHigh,
+    marginBottom: 8,
+  },
+  modalHeaderTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.onBackground,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+
   statusTextCanceled: { color: Colors.error },
 
   // ESTILOS PARA ESTADOS DE CARGA, ERROR Y VACÍO

@@ -28,20 +28,28 @@ import { Image } from 'react-native';
 
 // Props que recibe esta pantalla desde el Navigator
 interface LoginScreenProps {
-  onLogin: (email?: string) => void | Promise<void>; // Función que se llama cuando el login es exitoso
+  onLogin: (email?: string, password?: string) => void | Promise<void>; // Función que se llama cuando el login es exitoso
+  onForgotPassword?: () => void; // Función para navegar al flujo de recuperación de contraseña
+  initialEmail?: string;         // Correo precargado tras restablecer contraseña
 }
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }: LoginScreenProps) {
   // useState es un "Hook" — una función especial de React que crea una variable
   // que cuando cambia, hace que el componente se vuelva a renderizar.
   //
   // Sintaxis: const [valor, setValor] = useState(valorInicial)
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+
+  React.useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
 
   // Función que simula el proceso de login
   const handleLogin = async () => {
@@ -49,7 +57,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     try {
       // Simula pequeña latencia de red para la animación de carga
       await new Promise((resolve) => setTimeout(resolve, 500));
-      await onLogin(email);
+      await onLogin(email, password);
     } catch (error) {
       console.error('[LoginScreen] Error durante login:', error);
     } finally {
@@ -122,7 +130,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
                 <Text style={styles.fieldLabel}>PASSWORD</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={onForgotPassword} activeOpacity={0.7}>
                   <Text style={styles.forgotText}>¿OLVIDASTE?</Text>
                 </TouchableOpacity>
               </View>

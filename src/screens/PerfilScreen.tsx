@@ -72,6 +72,25 @@ export default function PerfilScreen() {
 
   // Navegación y contextos
   const navigation = useNavigation<any>();
+
+const { logout, userData } = useAuth();
+const { addItem } = useCart();
+
+const userName = userData?.name || 'Carlos Mendoza';
+const userEmail = userData?.email || 'carlos@foodpass.com';
+
+const userInitials = userName
+  .split(' ')
+  .filter(Boolean)
+  .map((w) => w[0])
+  .slice(0, 2)
+  .join('')
+  .toUpperCase() || 'CM';
+
+const userPlan = userData?.plan
+  ? `${userData.plan} Member`
+  : 'Premium Member';
+
   const { logout, userData, updateUser } = useAuth();
   const { addItem } = useCart();
 
@@ -255,6 +274,7 @@ export default function PerfilScreen() {
       ],
     },
   ];
+
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
