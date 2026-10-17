@@ -34,12 +34,16 @@ import {
 
 // Datos del usuario almacenados en la sesión.
 export interface UserData {
-  id: string;
+  id: string | number;
   name: string;
   email: string;
   role: string;
+  telefono?: string | null;
+  direccion?: string | null;
   avatar?: string;
   plan?: string;
+  membresia?: string;
+  puntos_fp?: number;
 }
 
 // Tipo del contexto de autenticación.
@@ -51,6 +55,9 @@ interface AuthContextType {
   login: (token: string, user: UserData) => Promise<void>;
   updateUser: (updatedData: Partial<UserData>) => Promise<void>;
   logout: () => Promise<void>;
+
+  /** Actualiza parcialmente los datos del usuario en sesión y almacenamiento */
+  updateUser: (updated: Partial<UserData>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -158,7 +165,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // ── Actualizar perfil del usuario (T11 - RFM12) ──
+  const updateUser = useCallback(async (updated: Partial<UserData>) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const merged = { ...prev, ...updated };
+      saveUserDataToStore(merged).catch((err) =>
+        console.warn('[AuthContext] Error al persistir datos actualizados:', err)
+      );
+      return merged;
+    });
+  }, []);
+
   return (
+
     <AuthContext.Provider
       value={{
         isAuth,
@@ -170,6 +190,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         logout,
       }}
     >
+
+    <AuthContext.Provider value={{ isAuth, token, userData, isLoading, login, logout, updateUser }}>
+
       {children}
     </AuthContext.Provider>
   );

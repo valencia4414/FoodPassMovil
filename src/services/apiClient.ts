@@ -1,10 +1,26 @@
 
-import axios from 'axios';
+
+// src/services/apiClient.ts
+//
+
+
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
+
 export const TOKEN_KEY = 'foodpass_jwt_token';
 export const USER_DATA_KEY = 'foodpass_user_data';
+
+
+// ──────────────────────────────────────────────
+// Constantes
+// ──────────────────────────────────────────────
+
+export const TOKEN_KEY = 'foodpass_jwt_token';
+export const USER_DATA_KEY = 'foodpass_user_data';
+
+// URL base del backend unificada (soporta variable de entorno o selección por plataforma)
 
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
@@ -12,6 +28,12 @@ export const API_BASE_URL =
     android: 'http://10.0.2.2:3000/api',
     default: 'http://localhost:3000/api',
   });
+
+
+// ──────────────────────────────────────────────
+// Capa de Almacenamiento Seguro Multiplataforma
+// ──────────────────────────────────────────────
+
 
 const safeStorage = {
   async getItem(key: string): Promise<string | null> {
@@ -69,10 +91,19 @@ export const apiClient = axios.create({
   },
 });
 
+
+
+// ──────────────────────────────────────────────
+// Interceptor de REQUEST
+// ──────────────────────────────────────────────
+
+
 apiClient.interceptors.request.use(
-  async (config) => {
+  async (config: InternalAxiosRequestConfig) => {
     try {
+
       // Evita duplicar /api cuando una ruta ya incluye ese prefijo.
+
       if (config.url?.startsWith('/api/')) {
         config.url = config.url.replace(/^\/api/, '');
       }
@@ -83,7 +114,11 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
+
       console.warn('[apiClient] No se pudo leer el token:', error);
+
+      console.warn('[apiClient] No se pudo leer el token de almacenamiento:', error);
+
     }
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -121,6 +156,37 @@ apiClient.interceptors.response.use(
         console.warn('[apiClient] Acceso denegado (403).');
       }
 
+  (error: any) => {
+    return Promise.reject(error);
+  }
+);
+
+// ──────────────────────────────────────────────
+// Interceptor de RESPONSE
+// ──────────────────────────────────────────────
+
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    return response;
+  },
+  async (error: any) => {
+    const status = error.response?.status;
+
+    if (status === 401) {
+      console.warn('[apiClient] Token expirado o inválido (401). Limpiando sesión...');
+      try {
+        await safeStorage.deleteItem(TOKEN_KEY);
+        await safeStorage.deleteItem(USER_DATA_KEY);
+      } catch (cleanupError) {
+        console.warn('[apiClient] Error al limpiar almacenamiento tras 401:', cleanupError);
+      }
+    }
+
+    if (status === 403) {
+      console.warn('[apiClient] Acceso denegado (403).');
+    }
+
+
       if (status === 500) {
         console.error('[apiClient] Error interno del servidor (500).');
       }
@@ -129,6 +195,13 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+
+
+// ──────────────────────────────────────────────
+// Helpers de Almacenamiento Seguro
+// ──────────────────────────────────────────────
+
 
 export async function saveToken(token: string): Promise<void> {
   await safeStorage.setItem(TOKEN_KEY, token);
@@ -142,9 +215,13 @@ export async function removeToken(): Promise<void> {
   await safeStorage.deleteItem(TOKEN_KEY);
 }
 
+acoplamiento
 export async function saveUserData<T = unknown>(
   userData: T
 ): Promise<void> {
+
+export async function saveUserData<T = unknown>(userData: T): Promise<void> {
+
   await safeStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
 }
 
@@ -169,4 +246,8 @@ export async function clearSession(): Promise<void> {
   ]);
 }
 
+
 export default apiClient;
+
+export default apiClient;
+

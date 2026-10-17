@@ -153,11 +153,16 @@ export default function AppNavigator() {
                       role: 'beneficiario',
                       plan: 'Premium',
                     };
+
                     await login(validToken, {
                         ...validUser,
                          id: String(validUser.id),
                     });
                     
+
+
+                    await login(validToken, validUser);
+
                   }}
                 />
               )}
