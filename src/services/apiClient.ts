@@ -1,10 +1,17 @@
+
+
 // src/services/apiClient.ts
 //
-// Cliente HTTP centralizado con interceptores de autenticación.
+
 
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+
+
+export const TOKEN_KEY = 'foodpass_jwt_token';
+export const USER_DATA_KEY = 'foodpass_user_data';
+
 
 // ──────────────────────────────────────────────
 // Constantes
@@ -14,6 +21,7 @@ export const TOKEN_KEY = 'foodpass_jwt_token';
 export const USER_DATA_KEY = 'foodpass_user_data';
 
 // URL base del backend unificada (soporta variable de entorno o selección por plataforma)
+
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   Platform.select({
@@ -21,55 +29,58 @@ export const API_BASE_URL =
     default: 'http://localhost:3000/api',
   });
 
+
 // ──────────────────────────────────────────────
 // Capa de Almacenamiento Seguro Multiplataforma
 // ──────────────────────────────────────────────
+
 
 const safeStorage = {
   async getItem(key: string): Promise<string | null> {
     if (Platform.OS === 'web') {
       try {
-        return typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(key) : null;
-      } catch (err) {
-        console.warn(`[safeStorage] Error al leer ${key} de localStorage:`, err);
+        return typeof window !== 'undefined'
+          ? window.localStorage.getItem(key)
+          : null;
+      } catch (error) {
+        console.warn(`[safeStorage] Error al leer ${key}:`, error);
         return null;
       }
     }
-    return await SecureStore.getItemAsync(key);
+
+    return SecureStore.getItemAsync(key);
   },
 
   async setItem(key: string, value: string): Promise<void> {
     if (Platform.OS === 'web') {
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
+        if (typeof window !== 'undefined') {
           window.localStorage.setItem(key, value);
         }
-      } catch (err) {
-        console.warn(`[safeStorage] Error al guardar ${key} en localStorage:`, err);
+      } catch (error) {
+        console.warn(`[safeStorage] Error al guardar ${key}:`, error);
       }
       return;
     }
+
     await SecureStore.setItemAsync(key, value);
   },
 
   async deleteItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
+        if (typeof window !== 'undefined') {
           window.localStorage.removeItem(key);
         }
-      } catch (err) {
-        console.warn(`[safeStorage] Error al eliminar ${key} de localStorage:`, err);
+      } catch (error) {
+        console.warn(`[safeStorage] Error al eliminar ${key}:`, error);
       }
       return;
     }
+
     await SecureStore.deleteItemAsync(key);
   },
 };
-
-// ──────────────────────────────────────────────
-// Instancia de Axios
-// ──────────────────────────────────────────────
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -80,13 +91,19 @@ export const apiClient = axios.create({
   },
 });
 
+
+
 // ──────────────────────────────────────────────
 // Interceptor de REQUEST
 // ──────────────────────────────────────────────
 
+
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
+
+      // Evita duplicar /api cuando una ruta ya incluye ese prefijo.
+
       if (config.url?.startsWith('/api/')) {
         config.url = config.url.replace(/^\/api/, '');
       }
@@ -97,18 +114,48 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
+
+      console.warn('[apiClient] No se pudo leer el token:', error);
+
       console.warn('[apiClient] No se pudo leer el token de almacenamiento:', error);
+
     }
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log(
-        `[apiClient] → ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url || ''}`,
+        `[apiClient] ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url || ''}`,
         config.headers.Authorization ? '(con token Bearer)' : '(sin token)'
       );
     }
 
     return config;
   },
+  (error: unknown) => Promise.reject(error)
+);
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+
+      if (status === 401) {
+        console.warn('[apiClient] Token inválido o expirado. Limpiando sesión.');
+
+        try {
+          await Promise.all([
+            safeStorage.deleteItem(TOKEN_KEY),
+            safeStorage.deleteItem(USER_DATA_KEY),
+          ]);
+        } catch (cleanupError) {
+          console.warn('[apiClient] Error al limpiar la sesión:', cleanupError);
+        }
+      }
+
+      if (status === 403) {
+        console.warn('[apiClient] Acceso denegado (403).');
+      }
+
   (error: any) => {
     return Promise.reject(error);
   }
@@ -139,36 +186,48 @@ apiClient.interceptors.response.use(
       console.warn('[apiClient] Acceso denegado (403).');
     }
 
-    if (status === 500) {
-      console.error('[apiClient] Error interno del servidor (500).');
+
+      if (status === 500) {
+        console.error('[apiClient] Error interno del servidor (500).');
+      }
     }
 
     return Promise.reject(error);
   }
 );
 
+
+
 // ──────────────────────────────────────────────
 // Helpers de Almacenamiento Seguro
 // ──────────────────────────────────────────────
+
 
 export async function saveToken(token: string): Promise<void> {
   await safeStorage.setItem(TOKEN_KEY, token);
 }
 
 export async function getToken(): Promise<string | null> {
-  return await safeStorage.getItem(TOKEN_KEY);
+  return safeStorage.getItem(TOKEN_KEY);
 }
 
 export async function removeToken(): Promise<void> {
   await safeStorage.deleteItem(TOKEN_KEY);
 }
 
+acoplamiento
+export async function saveUserData<T = unknown>(
+  userData: T
+): Promise<void> {
+
 export async function saveUserData<T = unknown>(userData: T): Promise<void> {
+
   await safeStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
 }
 
 export async function getUserData<T = unknown>(): Promise<T | null> {
   const data = await safeStorage.getItem(USER_DATA_KEY);
+
   if (data) {
     try {
       return JSON.parse(data) as T;
@@ -176,6 +235,7 @@ export async function getUserData<T = unknown>(): Promise<T | null> {
       return null;
     }
   }
+
   return null;
 }
 
@@ -186,4 +246,8 @@ export async function clearSession(): Promise<void> {
   ]);
 }
 
+
 export default apiClient;
+
+export default apiClient;
+

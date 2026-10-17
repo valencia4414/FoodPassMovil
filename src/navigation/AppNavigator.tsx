@@ -154,7 +154,15 @@ export default function AppNavigator() {
                       plan: 'Premium',
                     };
 
+                    await login(validToken, {
+                        ...validUser,
+                         id: String(validUser.id),
+                    });
+                    
+
+
                     await login(validToken, validUser);
+
                   }}
                 />
               )}
