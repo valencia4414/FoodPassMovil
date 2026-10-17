@@ -23,18 +23,44 @@ import { Image } from 'react-native';
 import apiClient from '../services/apiClient';
 import { useAuth } from '../context/AuthContext'; // <-- Importante para la T03
 
+<<<<<<< HEAD
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
+=======
+// Props que recibe esta pantalla desde el Navigator
+interface LoginScreenProps {
+  onLogin: (email?: string, password?: string) => void | Promise<void>; // Función que se llama cuando el login es exitoso
+  onForgotPassword?: () => void; // Función para navegar al flujo de recuperación de contraseña
+  initialEmail?: string;         // Correo precargado tras restablecer contraseña
+}
+
+export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }: LoginScreenProps) {
+  // useState es un "Hook" — una función especial de React que crea una variable
+  // que cuando cambia, hace que el componente se vuelva a renderizar.
+  //
+  // Sintaxis: const [valor, setValor] = useState(valorInicial)
+  const [email, setEmail] = useState(initialEmail || '');
+>>>>>>> acoplamiento
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
+<<<<<<< HEAD
   // Extraemos la función login del contexto global (T03)[cite: 1]
   const { login } = useAuth();
 
   // Función de inicio de sesión real con el Backend (T03)[cite: 1]
+=======
+  React.useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
+
+  // Función que simula el proceso de login
+>>>>>>> acoplamiento
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
@@ -43,6 +69,7 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+<<<<<<< HEAD
       const response = await apiClient.post('/api/auth/login', {
         email: email.trim(),
         password: password,
@@ -57,6 +84,12 @@ export default function LoginScreen() {
       await login(token, user || { id: '1', name: email.split('@')[0], email, role: 'client' });
 
     } catch (error: any) {
+=======
+      // Simula pequeña latencia de red para la animación de carga
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await onLogin(email, password);
+    } catch (error) {
+>>>>>>> acoplamiento
       console.error('[LoginScreen] Error durante login:', error);
       
       const errorMessage =
@@ -122,7 +155,7 @@ export default function LoginScreen() {
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
                 <Text style={styles.fieldLabel}>PASSWORD</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={onForgotPassword} activeOpacity={0.7}>
                   <Text style={styles.forgotText}>¿OLVIDASTE?</Text>
                 </TouchableOpacity>
               </View>

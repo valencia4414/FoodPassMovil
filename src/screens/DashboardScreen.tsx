@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
 import { apiClient } from '../services/apiClient';
+import PedidoStatusTracker from '../components/PedidoStatusTracker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -100,6 +101,9 @@ export default function DashboardScreen() {
           </View>
           <MaterialIcons name="restaurant" size={80} color={Colors.primaryContainer} style={styles.heroIcon} />
         </View>
+
+        {/* SEGUIMIENTO DE PEDIDO EN TIEMPO REAL (T13 - RFM14: Polling intermitente cada 4s) */}
+        <PedidoStatusTracker initialOrderId={14} />
 
         <View style={styles.statsRow}>
           <View style={[styles.statCard, styles.statCardGreen]}>
