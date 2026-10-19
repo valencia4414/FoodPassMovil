@@ -1,8 +1,8 @@
 // src/components/shared/CartModal.tsx
 //
-// Modal interactivo del carrito de compras (T07 - RFM04, RFM05).
+// Modal interactivo del carrito de compras (T07 - RFM04, RFM05, T09).
 // Muestra los productos seleccionados, permite ajustar cantidades,
-// vaciar el carrito, y ver el total calculado dinámicamente antes del checkout.
+// vaciar el carrito, y procesa el pago real contra la API (T09).
 
 import React, { useState } from 'react';
 import {
@@ -34,24 +34,37 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
     clearCart,
     getTotalPrice,
     totalItems,
+    checkoutOrder,   // <--- Añadido para T09
+    isCheckingOut,   // <--- Añadido para T09 (estado de carga)
   } = useCart();
 
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
   const totalPrice = getTotalPrice();
 
-  const handleCheckout = () => {
-    if (items.length === 0) return;
-    setCheckoutSuccess(true);
-    setTimeout(() => {
-      clearCart();
-      setCheckoutSuccess(false);
-      onClose();
+  // ── INTEGRACIÓN T09: CHECKOUT REAL CONTRA EL BACKEND Y MYSQL ──
+  const handleCheckout = async () => {
+    if (items.length === 0 || isCheckingOut) return;
+
+    try {
+      // Llamamos a la función del Context que hace el POST /api/pedidos con Transacción SQL
+      const response = await checkoutOrder('efectivo');
+      
+      setCheckoutSuccess(true);
+      setTimeout(() => {
+        setCheckoutSuccess(false);
+        onClose();
+        Alert.alert(
+          '¡Pedido Confirmado! 🎉',
+          `Tu orden #${response?.data?.pedido_id || ''} por un total of $${totalPrice.toFixed(2)} ha sido guardada en la base de datos con éxito. Puedes ver el estado en tu Historial.`
+        );
+      }, 1000);
+    } catch (error: any) {
       Alert.alert(
-        '¡Pedido Confirmado! 🎉',
-        `Tu pedido por un total de $${totalPrice.toFixed(2)} ha sido procesado con éxito. Puedes ver el estado en tu Historial.`
+        'Error en el pago ❌',
+        error.message || 'No se pudo procesar tu orden con el servidor.'
       );
-    }, 1200);
+    }
   };
 
   const handleClear = () => {
@@ -117,7 +130,7 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
               {/* LISTA DE ITEMS */}
               <FlatList
                 data={items}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => String(item.id)}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.listContent}
                 renderItem={({ item }) => {
@@ -194,11 +207,11 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
                   <Text style={styles.totalValue}>${totalPrice.toFixed(2)}</Text>
                 </View>
 
-                {/* BOTÓN CHECKOUT */}
+                {/* BOTÓN CHECKOUT (CONECTADO A T09) */}
                 <TouchableOpacity
-                  style={[styles.checkoutBtn, checkoutSuccess && styles.checkoutBtnSuccess]}
+                  style={[styles.checkoutBtn, (checkoutSuccess || isCheckingOut) && styles.checkoutBtnSuccess]}
                   onPress={handleCheckout}
-                  disabled={checkoutSuccess}
+                  disabled={checkoutSuccess || isCheckingOut}
                   activeOpacity={0.85}
                 >
                   <MaterialIcons
@@ -207,7 +220,11 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
                     color={Colors.onPrimaryContainer}
                   />
                   <Text style={styles.checkoutBtnText}>
-                    {checkoutSuccess ? 'Procesando...' : `Proceder al Checkout • $${totalPrice.toFixed(2)}`}
+                    {isCheckingOut
+                      ? 'Guardando en Base de Datos...'
+                      : checkoutSuccess
+                      ? '¡Pedido Exitoso!'
+                      : `Proceder al Checkout • $${totalPrice.toFixed(2)}`}
                   </Text>
                 </TouchableOpacity>
               </View>

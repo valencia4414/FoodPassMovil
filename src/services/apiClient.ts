@@ -1,8 +1,6 @@
-
-
 // src/services/apiClient.ts
 //
-// Cliente HTTP centralizado con Axios y almacenamiento seguro.
+// Cliente HTTP centralizado con interceptores de autenticación y almacenamiento seguro.
 
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { Platform } from 'react-native';
@@ -22,26 +20,23 @@ export const API_BASE_URL =
 // ──────────────────────────────────────────────
 // Capa de Almacenamiento Seguro Multiplataforma
 // ──────────────────────────────────────────────
-
 const safeStorage = {
   async getItem(key: string): Promise<string | null> {
     if (Platform.OS === 'web') {
       try {
-        return typeof window !== 'undefined'
-          ? window.localStorage.getItem(key)
-          : null;
+        return typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem(key) : null;
       } catch (error) {
         console.warn(`[safeStorage] Error al leer ${key}:`, error);
         return null;
       }
     }
-    return SecureStore.getItemAsync(key);
+    return await SecureStore.getItemAsync(key);
   },
 
   async setItem(key: string, value: string): Promise<void> {
     if (Platform.OS === 'web') {
       try {
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.setItem(key, value);
         }
       } catch (error) {
@@ -55,7 +50,7 @@ const safeStorage = {
   async deleteItem(key: string): Promise<void> {
     if (Platform.OS === 'web') {
       try {
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.removeItem(key);
         }
       } catch (error) {
@@ -79,7 +74,6 @@ export const apiClient = axios.create({
 // ──────────────────────────────────────────────
 // Interceptor de REQUEST
 // ──────────────────────────────────────────────
-
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
@@ -98,43 +92,44 @@ apiClient.interceptors.request.use(
 
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log(
-        `[apiClient] ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url || ''}`,
+        `[apiClient] → ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url || ''}`,
         config.headers.Authorization ? '(con token Bearer)' : '(sin token)'
       );
     }
 
     return config;
   },
-  (error: unknown) => Promise.reject(error)
+  (error: any) => Promise.reject(error)
 );
 
 // ──────────────────────────────────────────────
 // Interceptor de RESPONSE
 // ──────────────────────────────────────────────
-
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: any) => {
-    const status = error.response?.status;
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
 
-    if (status === 401) {
-      console.warn('[apiClient] Token expirado o inválido (401). Limpiando sesión...');
-      try {
-        await Promise.all([
-          safeStorage.deleteItem(TOKEN_KEY),
-          safeStorage.deleteItem(USER_DATA_KEY),
-        ]);
-      } catch (cleanupError) {
-        console.warn('[apiClient] Error al limpiar almacenamiento tras 401:', cleanupError);
+      if (status === 401) {
+        console.warn('[apiClient] Token inválido o expirado (401). Limpiando sesión...');
+        try {
+          await Promise.all([
+            safeStorage.deleteItem(TOKEN_KEY),
+            safeStorage.deleteItem(USER_DATA_KEY),
+          ]);
+        } catch (cleanupError) {
+          console.warn('[apiClient] Error al limpiar la sesión:', cleanupError);
+        }
       }
-    }
 
-    if (status === 403) {
-      console.warn('[apiClient] Acceso denegado (403).');
-    }
+      if (status === 403) {
+        console.warn('[apiClient] Acceso denegado (403).');
+      }
 
-    if (status === 500) {
-      console.error('[apiClient] Error interno del servidor (500).');
+      if (status === 500) {
+        console.error('[apiClient] Error interno del servidor (500).');
+      }
     }
 
     return Promise.reject(error);
@@ -144,13 +139,12 @@ apiClient.interceptors.response.use(
 // ──────────────────────────────────────────────
 // Helpers de Almacenamiento Seguro
 // ──────────────────────────────────────────────
-
 export async function saveToken(token: string): Promise<void> {
   await safeStorage.setItem(TOKEN_KEY, token);
 }
 
 export async function getToken(): Promise<string | null> {
-  return safeStorage.getItem(TOKEN_KEY);
+  return await safeStorage.getItem(TOKEN_KEY);
 }
 
 export async function removeToken(): Promise<void> {

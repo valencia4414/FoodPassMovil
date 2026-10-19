@@ -1,20 +1,7 @@
 // src/context/AuthContext.tsx
 //
 // Contexto de React para manejar el estado de autenticación de forma global.
-//
-// Este contexto:
-// 1. Almacena el estado de sesión (isAuth, token, userData).
-// 2. Persiste el token JWT en SecureStore (almacenamiento seguro del dispositivo).
-// 3. Al iniciar la app, intenta restaurar la sesión desde SecureStore.
-// 4. Expone funciones login() y logout() que cualquier pantalla puede usar.
-// 5. El estado "isLoading" evita flashes de login mientras se restaura la sesión.
-//
-// Uso:
-//   import { useAuth } from '../context/AuthContext';
-//   const { isAuth, userData, login, logout } = useAuth();
 
-
- // src/context/AuthContext.tsx
 import React, {
   createContext,
   useState,
@@ -46,7 +33,7 @@ export interface UserData {
   puntos_fp?: number;
 }
 
-// Tipo del contexto de autenticación.
+// Tipo del contexto de autenticación (Una sola vez)
 interface AuthContextType {
   isAuth: boolean;
   token: string | null;
@@ -55,9 +42,6 @@ interface AuthContextType {
   login: (token: string, user: UserData) => Promise<void>;
   updateUser: (updatedData: Partial<UserData>) => Promise<void>;
   logout: () => Promise<void>;
-
-  /** Actualiza parcialmente los datos del usuario en sesión y almacenamiento */
-  updateUser: (updated: Partial<UserData>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -125,25 +109,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  // Actualizar los datos del usuario en el estado y almacenamiento local.
-  const updateUser = useCallback(
-    async (updatedData: Partial<UserData>) => {
-      if (!userData) {
-        throw new Error(
-          'No hay un usuario autenticado para actualizar.',
-        );
-      }
-
-      const updatedUser: UserData = {
-        ...userData,
-        ...updatedData,
-      };
-
-      await saveUserDataToStore(updatedUser);
-      setUserData(updatedUser);
-    },
-    [userData],
-  );
+  // Actualizar los datos del usuario en el estado y almacenamiento local (Una sola versión robusta).
+  const updateUser = useCallback(async (updated: Partial<UserData>) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const merged = { ...prev, ...updated };
+      saveUserDataToStore(merged).catch((err) =>
+        console.warn('[AuthContext] Error al persistir datos actualizados:', err)
+      );
+      return merged;
+    });
+  }, []);
 
   // Cerrar sesión.
   const logout = useCallback(async () => {
@@ -165,20 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // ── Actualizar perfil del usuario (T11 - RFM12) ──
-  const updateUser = useCallback(async (updated: Partial<UserData>) => {
-    setUserData((prev) => {
-      if (!prev) return null;
-      const merged = { ...prev, ...updated };
-      saveUserDataToStore(merged).catch((err) =>
-        console.warn('[AuthContext] Error al persistir datos actualizados:', err)
-      );
-      return merged;
-    });
-  }, []);
-
   return (
-
     <AuthContext.Provider
       value={{
         isAuth,
@@ -190,9 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         logout,
       }}
     >
-
-    <AuthContext.Provider value={{ isAuth, token, userData, isLoading, login, logout, updateUser }}>
-
       {children}
     </AuthContext.Provider>
   );
