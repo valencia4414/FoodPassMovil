@@ -1,8 +1,7 @@
 // src/screens/LoginScreen.tsx
-//
 // Pantalla de inicio de sesión integrada con el Backend y AuthContext (T03).
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,53 +13,40 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, BorderRadius, Typography } from '../theme/colors';
-import { Image } from 'react-native';
+import { Colors, BorderRadius } from '../theme/colors';
 import apiClient from '../services/apiClient';
-import { useAuth } from '../context/AuthContext'; // <-- Importante para la T03
+import { useAuth } from '../context/AuthContext';
 
-<<<<<<< HEAD
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-=======
-// Props que recibe esta pantalla desde el Navigator
 interface LoginScreenProps {
-  onLogin: (email?: string, password?: string) => void | Promise<void>; // Función que se llama cuando el login es exitoso
-  onForgotPassword?: () => void; // Función para navegar al flujo de recuperación de contraseña
-  initialEmail?: string;         // Correo precargado tras restablecer contraseña
+  onLogin?: (email?: string, password?: string) => void | Promise<void>; 
+  onForgotPassword?: () => void; 
+  onNavigateRegister?: () => void; // <--- Añadido para habilitar el cambio a registro
+  initialEmail?: string;         
 }
 
-export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }: LoginScreenProps) {
-  // useState es un "Hook" — una función especial de React que crea una variable
-  // que cuando cambia, hace que el componente se vuelva a renderizar.
-  //
-  // Sintaxis: const [valor, setValor] = useState(valorInicial)
+export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegister, initialEmail }: LoginScreenProps) {
   const [email, setEmail] = useState(initialEmail || '');
->>>>>>> acoplamiento
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-<<<<<<< HEAD
-  // Extraemos la función login del contexto global (T03)[cite: 1]
+  // Extraemos la función login del contexto global (T03)
   const { login } = useAuth();
 
-  // Función de inicio de sesión real con el Backend (T03)[cite: 1]
-=======
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialEmail) {
       setEmail(initialEmail);
     }
   }, [initialEmail]);
 
-  // Función que simula el proceso de login
->>>>>>> acoplamiento
+  // Función de inicio de sesión real con el Backend (T03)
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
@@ -69,7 +55,6 @@ export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }:
 
     setIsLoading(true);
     try {
-<<<<<<< HEAD
       const response = await apiClient.post('/api/auth/login', {
         email: email.trim(),
         password: password,
@@ -81,15 +66,10 @@ export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }:
         throw new Error('No se recibió un token válido del servidor.');
       }
 
+      // Guardamos la sesión mediante el AuthContext
       await login(token, user || { id: '1', name: email.split('@')[0], email, role: 'client' });
 
     } catch (error: any) {
-=======
-      // Simula pequeña latencia de red para la animación de carga
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await onLogin(email, password);
-    } catch (error) {
->>>>>>> acoplamiento
       console.error('[LoginScreen] Error durante login:', error);
       
       const errorMessage =
@@ -98,6 +78,11 @@ export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }:
         'Credenciales incorrectas o error de conexión con el servidor.';
       
       Alert.alert('Error de autenticación', errorMessage);
+      
+      // Opcional: si mantienes un callback legacy de respaldo
+      if (onLogin) {
+        await onLogin(email, password);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -228,10 +213,11 @@ export default function LoginScreen({ onLogin, onForgotPassword, initialEmail }:
               <Text style={styles.googleButtonText}>Google</Text>
             </TouchableOpacity>
 
+            {/* Footer con el botón de Crear Cuenta conectado */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Crear Ledger</Text>
+              <TouchableOpacity onPress={onNavigateRegister} activeOpacity={0.7}>
+                <Text style={styles.footerLink}>Crear Cuenta</Text>
               </TouchableOpacity>
             </View>
           </View>

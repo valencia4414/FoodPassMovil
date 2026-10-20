@@ -1,6 +1,6 @@
 // src/screens/RegisterScreen.tsx
 //
-// Pantalla de registro de nuevos usuarios con cumplimiento legal (T04).
+// Pantalla de registro de nuevos usuarios con cumplimiento legal y documento (T04).
 
 import React, { useState } from 'react';
 import {
@@ -15,29 +15,31 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius } from '../theme/colors';
-import { Image } from 'react-native';
 import apiClient from '../services/apiClient';
 
 export default function RegisterScreen({ navigation }: any) {
   const [name, setName] = useState('');
+  const [documento, setDocumento] = useState(''); // <--- Nuevo estado para la cédula
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptPolicy, setAcceptPolicy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const [nameFocused, setNameFocused] = useState(false);
+  const [documentoFocused, setDocumentoFocused] = useState(false); // <--- Focus para el documento
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  // Función de registro (T04: Conexión con POST /api/auth/register y validación legal)
+  // Función de registro (T04: Conexión con POST /api/auth/register)
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Campos incompletos', 'Por favor completa todos los campos.');
+    if (!name.trim() || !documento.trim() || !email.trim() || !password.trim()) {
+      Alert.alert('Campos incompletos', 'Por favor completa todos los campos, incluyendo tu documento.');
       return;
     }
 
@@ -51,9 +53,10 @@ export default function RegisterScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      // Petición POST al endpoint de registro del backend
+      // Petición POST al endpoint de registro del backend enviando el documento
       await apiClient.post('/api/auth/register', {
         name: name.trim(),
+        documento: documento.trim(), // <--- Enviando la cédula al backend
         email: email.trim(),
         password: password,
       });
@@ -66,10 +69,9 @@ export default function RegisterScreen({ navigation }: any) {
     } catch (error: any) {
       console.error('[RegisterScreen] Error durante el registro:', error);
       
-      // Manejo de errores (ej. correos duplicados devueltos por el backend)
       const errorMessage =
         error.response?.data?.message ||
-        'Ocurrió un error al registrar el usuario (correo duplicado o fallo en el servidor).';
+        'Ocurrió un error al registrar el usuario (documento/correo duplicado o fallo en el servidor).';
       
       Alert.alert('Error de registro', errorMessage);
     } finally {
@@ -123,6 +125,29 @@ export default function RegisterScreen({ navigation }: any) {
               </View>
             </View>
 
+            {/* Campo de Documento / Cédula */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>CÉDULA DE CIUDADANÍA</Text>
+              <View style={[styles.inputWrapper, documentoFocused && styles.inputWrapperFocused]}>
+                <MaterialIcons
+                  name="badge"
+                  size={20}
+                  color={documentoFocused ? Colors.tertiary : Colors.onSurfaceVariant}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Número de documento"
+                  placeholderTextColor={Colors.onSurfaceVariant + '80'}
+                  value={documento}
+                  onChangeText={setDocumento}
+                  onFocus={() => setDocumentoFocused(true)}
+                  onBlur={() => setDocumentoFocused(false)}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
             {/* Campo de Email */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>CORREO ELECTRÓNICO</Text>
@@ -172,7 +197,7 @@ export default function RegisterScreen({ navigation }: any) {
               </View>
             </View>
 
-            {/* Cumplimiento Legal: Checkbox / Switch Ley de Protección de Datos */}
+            {/* Cumplimiento Legal */}
             <View style={styles.legalContainer}>
               <Switch
                 value={acceptPolicy}
