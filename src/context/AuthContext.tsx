@@ -32,7 +32,7 @@ export interface UserData {
   puntos_fp?: number;
 }
 
-// Tipo del contexto de autenticación.
+// Tipo del contexto de autenticación (Una sola vez)
 interface AuthContextType {
   isAuth: boolean;
   token: string | null;
@@ -108,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+
   // Actualizar los datos del usuario en el estado y almacenamiento local (T11 - RFM12).
   const updateUser = useCallback(
     async (updatedData: Partial<UserData>) => {
@@ -122,6 +123,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     []
   );
+
+  // Actualizar los datos del usuario en el estado y almacenamiento local (Una sola versión robusta).
+  const updateUser = useCallback(async (updated: Partial<UserData>) => {
+    setUserData((prev) => {
+      if (!prev) return null;
+      const merged = { ...prev, ...updated };
+      saveUserDataToStore(merged).catch((err) =>
+        console.warn('[AuthContext] Error al persistir datos actualizados:', err)
+      );
+      return merged;
+    });
+  }, []);
+
 
   // Cerrar sesión.
   const logout = useCallback(async () => {
