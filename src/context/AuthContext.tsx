@@ -1,4 +1,4 @@
-// src/context/AuthContext.tsx
+// src/services/../context/AuthContext.tsx
 //
 // Contexto de React para manejar el estado de autenticación de forma global.
 
@@ -13,7 +13,6 @@ import React, {
 import {
   saveToken,
   getToken,
-  removeToken,
   saveUserData as saveUserDataToStore,
   getUserData as getUserDataFromStore,
   clearSession,
@@ -109,6 +108,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
+
+  // Actualizar los datos del usuario en el estado y almacenamiento local (T11 - RFM12).
+  const updateUser = useCallback(
+    async (updatedData: Partial<UserData>) => {
+      setUserData((prev) => {
+        if (!prev) return null;
+        const merged = { ...prev, ...updatedData };
+        saveUserDataToStore(merged).catch((err) =>
+          console.warn('[AuthContext] Error al persistir datos actualizados:', err)
+        );
+        return merged;
+      });
+    },
+    []
+  );
+
   // Actualizar los datos del usuario en el estado y almacenamiento local (Una sola versión robusta).
   const updateUser = useCallback(async (updated: Partial<UserData>) => {
     setUserData((prev) => {
@@ -120,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return merged;
     });
   }, []);
+
 
   // Cerrar sesión.
   const logout = useCallback(async () => {
@@ -158,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-// Hook personalizado.
+// Hook personalizado para consumir el contexto de autenticación.
 export const useAuth = () => {
   const context = useContext(AuthContext);
 
