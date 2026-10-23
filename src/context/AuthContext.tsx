@@ -17,6 +17,7 @@ import {
   getUserData as getUserDataFromStore,
   clearSession,
 } from '../services/apiClient';
+import { unregisterPushToken } from '../services/pushNotificationService';
 
 // Datos del usuario almacenados en la sesión.
 export interface UserData {
@@ -109,22 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
 
-  // Actualizar los datos del usuario en el estado y almacenamiento local (T11 - RFM12).
-  const updateUser = useCallback(
-    async (updatedData: Partial<UserData>) => {
-      setUserData((prev) => {
-        if (!prev) return null;
-        const merged = { ...prev, ...updatedData };
-        saveUserDataToStore(merged).catch((err) =>
-          console.warn('[AuthContext] Error al persistir datos actualizados:', err)
-        );
-        return merged;
-      });
-    },
-    []
-  );
-
-  // Actualizar los datos del usuario en el estado y almacenamiento local (Una sola versión robusta).
+  // Actualizar los datos del usuario en el estado y almacenamiento local.
   const updateUser = useCallback(async (updated: Partial<UserData>) => {
     setUserData((prev) => {
       if (!prev) return null;
@@ -139,6 +125,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Cerrar sesión.
   const logout = useCallback(async () => {
+    try {
+      await unregisterPushToken();
+    } catch (error) {
+      console.warn(
+        '[AuthContext] No se pudo eliminar el token push antes del logout:',
+        error,
+      );
+    }
+
     try {
       await clearSession();
     } catch (error) {

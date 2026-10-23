@@ -3,8 +3,9 @@
 // Pantalla de perfil del usuario (T11 - RFM12).
 // Conectada dinámicamente con GET /api/users/me y PUT /api/users/me.
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -30,6 +31,10 @@ import SoporteChatScreen from './SoporteChatScreen';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { apiClient } from '../services/apiClient';
+import {
+  getPushNotificationsEnabled,
+  setPushNotificationsEnabled,
+} from '../services/pushNotificationService';
 
 // Tipo para los items del menú de configuración
 type SettingItem = {
@@ -74,6 +79,36 @@ export default function PerfilScreen() {
 
   const { logout, userData, updateUser } = useAuth();
   const { addItem } = useCart();
+
+  useEffect(() => {
+    getPushNotificationsEnabled()
+      .then(setNotificationsEnabled)
+      .catch((error) => {
+        console.error('[PerfilScreen] No se pudo cargar la preferencia push:', error);
+      });
+  }, []);
+
+  const handleNotificationsToggle = async (enabled: boolean) => {
+    try {
+      const isEnabled = await setPushNotificationsEnabled(enabled);
+      setNotificationsEnabled(isEnabled);
+
+      if (enabled && !isEnabled) {
+        Alert.alert(
+          'Notificaciones no habilitadas',
+          'Activa los permisos de notificación del dispositivo para recibir avisos de tus pedidos.'
+        );
+      }
+    } catch (error) {
+      console.error('[PerfilScreen] No se pudo actualizar la preferencia push:', error);
+      Alert.alert(
+        'No se pudo actualizar',
+        error instanceof Error
+          ? error.message
+          : 'Verifica tu conexión e inténtalo de nuevo.'
+      );
+    }
+  };
 
   // Refs para usar siempre el valor más reciente sin recrear fetchProfile
   const updateUserRef = useRef<any>(updateUser);
@@ -331,7 +366,7 @@ export default function PerfilScreen() {
                         <SwitchField
                           label={item.label}
                           value={notificationsEnabled}
-                          onToggle={(val: boolean) => setNotificationsEnabled(val)}
+                          onToggle={handleNotificationsToggle}
                         />
                       </View>
                     </View>

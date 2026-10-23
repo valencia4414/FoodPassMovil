@@ -21,6 +21,11 @@ export interface OrderStatusResponse {
   isSimulated?: boolean;
 }
 
+interface OrderStatusApiEnvelope {
+  success?: boolean;
+  data?: OrderStatusResponse;
+}
+
 // Mapeo amigable de etiquetas legibles por el usuario según T13:
 // "Mostrar 'En preparación', 'Listo', etc."
 export const ORDER_STATUS_LABELS: Record<OrderStatusType, string> = {
@@ -30,6 +35,42 @@ export const ORDER_STATUS_LABELS: Record<OrderStatusType, string> = {
   entregado: 'Entregado',
   cancelado: 'Cancelado',
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isOrderStatusResponse(value: unknown): value is OrderStatusResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (typeof value.id === 'string' || typeof value.id === 'number') &&
+    typeof value.estado === 'string' &&
+    Object.prototype.hasOwnProperty.call(ORDER_STATUS_LABELS, value.estado)
+  );
+}
+
+function normalizeOrderStatusResponse(
+  response: OrderStatusResponse | OrderStatusApiEnvelope
+): OrderStatusResponse | null {
+  const data = isOrderStatusResponse(response)
+    ? response
+    : isRecord(response) && isOrderStatusResponse(response.data)
+      ? response.data
+      : null;
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    ...data,
+    estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado],
+    isSimulated: false,
+  };
+}
 
 // Almacén en memoria de pedidos para pruebas locales o fallback en caso de red sin backend
 const localSimulatedOrders: Record<string, OrderStatusResponse> = {
@@ -67,30 +108,24 @@ export async function getOrderStatus(orderId: number | string): Promise<OrderSta
   const idStr = String(orderId);
 
   try {
-    const response = await apiClient.get<OrderStatusResponse>(`/api/pedidos/${idStr}/status`, {
+    // Intentar consultar el endpoint en el backend
+    // Probamos tanto /api/pedidos/:id/status como /pedidos/:id/status
+    const response = await apiClient.get<OrderStatusResponse | OrderStatusApiEnvelope>(`/api/pedidos/${idStr}/status`, {
       timeout: 3500,
     });
 
-    if (response?.data && response.data.estado) {
-      const data = response.data;
-      return {
-        ...data,
-        estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado] || data.estado,
-        isSimulated: false,
-      };
+    const data = normalizeOrderStatusResponse(response.data);
+    if (data) {
+      return data;
     }
   } catch (err: any) {
     try {
-      const fallbackResponse = await apiClient.get<OrderStatusResponse>(`/pedidos/${idStr}/status`, {
+      const fallbackResponse = await apiClient.get<OrderStatusResponse | OrderStatusApiEnvelope>(`/pedidos/${idStr}/status`, {
         timeout: 3500,
       });
-      if (fallbackResponse?.data && fallbackResponse.data.estado) {
-        const data = fallbackResponse.data;
-        return {
-          ...data,
-          estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado] || data.estado,
-          isSimulated: false,
-        };
+      const data = normalizeOrderStatusResponse(fallbackResponse.data);
+      if (data) {
+        return data;
       }
     } catch {
       // Backend no disponible en esta URL, usar fallback simulado

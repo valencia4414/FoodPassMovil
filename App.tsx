@@ -17,12 +17,14 @@ import { StatusBar } from 'expo-status-bar';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import { CartProvider } from './src/context/CartContext';
+import PushNotificationRegistration from './src/components/PushNotificationRegistration';
 
 export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <CartProvider>
+          <PushNotificationRegistration />
           <StatusBar style="dark" />
 
           <AppNavigator />
