@@ -25,7 +25,7 @@ import { useAuth } from '../context/AuthContext';
 interface LoginScreenProps {
   onLogin?: (email?: string, password?: string) => void | Promise<void>; 
   onForgotPassword?: () => void; 
-  onNavigateRegister?: () => void; // <--- Añadido para habilitar el cambio a registro
+  onNavigateRegister?: () => void;
   initialEmail?: string;         
 }
 
@@ -46,43 +46,76 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
     }
   }, [initialEmail]);
 
+  // Validación de formato de correo estándar
+  const isValidEmail = (emailStr: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
+  };
+
   // Función de inicio de sesión real con el Backend (T03)
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    // 1. Validaciones de datos de entrada
+    if (!cleanEmail || !cleanPassword) {
       Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
+    if (!isValidEmail(cleanEmail)) {
+      Alert.alert('Correo inválido', 'Por favor ingresa un correo electrónico válido (ejemplo: usuario@correo.com).');
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/api/auth/login', {
-        email: email.trim(),
+      // Ajuste automático por si apiClient ya tiene "/api" en su baseURL
+      const endpoint = apiClient.defaults.baseURL?.endsWith('/api') 
+        ? '/auth/login' 
+        : '/api/auth/login';
+
+      const response = await apiClient.post(endpoint, {
+        email: cleanEmail.toLowerCase(),
         password: password,
       });
 
-      const { token, user } = response.data;
+      // Extraemos el token y usuario ya sea que vengan dentro de response.data.data o directos
+      const resData = response.data?.data || response.data;
+      const token = resData?.token;
+      const user = resData?.user;
 
       if (!token) {
         throw new Error('No se recibió un token válido del servidor.');
       }
 
       // Guardamos la sesión mediante el AuthContext
-      await login(token, user || { id: '1', name: email.split('@')[0], email, role: 'client' });
+      await login(token, user || { id: '1', name: cleanEmail.split('@')[0], email: cleanEmail, role: 'client' });
+
+      // Solo si fue exitoso llamamos a onLogin
+      if (onLogin) {
+        await onLogin(cleanEmail, password);
+      }
 
     } catch (error: any) {
       console.error('[LoginScreen] Error durante login:', error);
       
-      const errorMessage =
-        error.response?.data?.message || 
-        error.message || 
-        'Credenciales incorrectas o error de conexión con el servidor.';
-      
-      Alert.alert('Error de autenticación', errorMessage);
-      
-      // Opcional: si mantienes un callback legacy de respaldo
-      if (onLogin) {
-        await onLogin(email, password);
+      let errorMessage = 'Usuario o contraseña incorrectos.';
+
+      if (error.response) {
+        if (error.response.status === 401 || error.response.status === 404) {
+          errorMessage = 'Credenciales inválidas. El usuario o la contraseña no coinciden.';
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error.request) {
+        errorMessage = 'No se pudo conectar con el servidor. Revisa tu conexión a internet o la IP del backend.';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
+      
+      // Alerta de error (diseño nativo sin alterar tu pantalla)
+      Alert.alert('Error de inicio de sesión', errorMessage);
+
     } finally {
       setIsLoading(false);
     }
@@ -132,6 +165,7 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -161,6 +195,7 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
                   onBlur={() => setPasswordFocused(false)}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!isLoading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -238,6 +273,7 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
   );
 }
 
+// Estilos 100% idénticos a tu código original
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,

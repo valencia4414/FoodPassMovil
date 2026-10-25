@@ -13,7 +13,7 @@ export const USER_DATA_KEY = 'foodpass_user_data';
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   Platform.select({
-    android: 'http://192.168.1.10:3000/api',
+    android: 'http://192.168.101.11:3000/api',
     default: 'http://localhost:3000/api',
   });
 
