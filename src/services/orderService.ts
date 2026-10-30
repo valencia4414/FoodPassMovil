@@ -189,33 +189,16 @@ export interface CreateOrderPayload {
  * Inyecta un token de desarrollo de respaldo para asegurar que pase el authMiddleware.
  */
 export async function createOrder(payload: CreateOrderPayload) {
-  // Token de respaldo del administrador para evitar bloqueos por el login simulado del frontend
-  const devFallbackToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkBmb29kcGFzcy5jb20iLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3OTIzOTM0OTQsImV4cCI6MTc5Mjk5ODI5NH0.QgYGZWjaEorTAYtIA2X7DaDpen7o5O0EKjMtT98ujtg';
+  const token = await getToken();
+  if (!token) {
+    throw new Error('Debes iniciar sesión para realizar un pedido.');
+  }
 
   try {
-    let token = await getToken();
-    if (!token) {
-      token = devFallbackToken;
-    }
-
-    const response = await apiClient.post('/api/pedidos', payload, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    return response.data;
+    const response = await apiClient.post('/pedidos', payload);
+    return response.data?.data || response.data;
   } catch (err: any) {
-    try {
-      let token = await getToken() || devFallbackToken;
-      const response = await apiClient.post('/pedidos', payload, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      return response.data;
-    } catch (fallbackErr: any) {
-      console.error('[orderService] Error al crear pedido:', fallbackErr?.response?.data || fallbackErr);
-      throw new Error(fallbackErr?.response?.data?.message || 'No se pudo procesar el pedido con el servidor.');
-    }
+    console.error('[orderService] Error al crear pedido:', err?.response?.data || err);
+    throw new Error(err?.response?.data?.message || 'No se pudo procesar el pedido con el servidor.');
   }
 }
