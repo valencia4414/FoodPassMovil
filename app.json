@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.foodpass.app",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/foodpass_logo.png",
         "backgroundColor": "#ffffff"

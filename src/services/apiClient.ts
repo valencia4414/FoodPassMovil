@@ -5,17 +5,52 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 
 export const TOKEN_KEY = 'foodpass_jwt_token';
 export const USER_DATA_KEY = 'foodpass_user_data';
 
-// URL base del backend unificada (soporta variable de entorno o selección por plataforma)
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ||
-  Platform.select({
-    android: 'http://192.168.101.11:3000/api',
-    default: 'http://localhost:3000/api',
-  });
+/**
+ * Resuelve dinámicamente la IP y puerto del backend para que cualquier integrante
+ * del equipo pueda probar la app desde su equipo sin modificar código ni IP fija.
+ */
+export function resolveApiBaseUrl(): string {
+  // 1. Si existe variable de entorno con IP explícita válida, usarla
+  if (process.env.EXPO_PUBLIC_API_URL && !process.env.EXPO_PUBLIC_API_URL.includes('192.168.101.11')) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // 2. Si se ejecuta en navegador Web, usar el mismo hostname del navegador
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname || 'localhost';
+    return `http://${host}:3000/api`;
+  }
+
+  // 3. Extraer automáticamente la IP de la máquina de desarrollo de quien corre Metro / Expo Go
+  const candidates = [
+    Constants.expoConfig?.hostUri,
+    (Constants as any)?.expoGoConfig?.debuggerHost,
+    (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost,
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri,
+    (Constants as any)?.manifest?.debuggerHost,
+    Constants.linkingUri,
+    (Constants as any)?.experienceUrl,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) {
+      const match = candidate.match(/(?:exp:\/\/|http:\/\/|https:\/\/)?([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/);
+      if (match && match[1] && match[1] !== '127.0.0.1' && match[1] !== '10.0.2.2') {
+        return `http://${match[1]}:3000/api`;
+      }
+    }
+  }
+
+  // 4. Fallback para red local (IP del servidor de desarrollo)
+  return 'http://192.168.1.2:3000/api';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 // ──────────────────────────────────────────────
 // Capa de Almacenamiento Seguro Multiplataforma
@@ -76,6 +111,12 @@ export const apiClient = axios.create({
 // ──────────────────────────────────────────────
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // Asegurar que baseURL esté actualizada dinámicamente
+    const currentBase = resolveApiBaseUrl();
+    if (!config.baseURL || config.baseURL.includes('10.0.2.2') || config.baseURL.includes('192.168.101.11')) {
+      config.baseURL = currentBase;
+    }
+
     try {
       // Evita duplicar /api cuando una ruta ya incluye ese prefijo.
       if (config.url?.startsWith('/api/')) {
@@ -84,18 +125,16 @@ apiClient.interceptors.request.use(
 
       const token = await safeStorage.getItem(TOKEN_KEY);
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization = 'Bearer ' + token;
       }
     } catch (error) {
       console.warn('[apiClient] No se pudo leer el token de almacenamiento:', error);
     }
 
-    if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.log(
-        `[apiClient] → ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url || ''}`,
-        config.headers.Authorization ? '(con token Bearer)' : '(sin token)'
-      );
-    }
+    console.log(
+      '[apiClient] 🚀 ' + (config.method || 'GET').toUpperCase() + ' ' + (config.baseURL || '') + (config.url || ''),
+      config.headers.Authorization ? '(con Bearer)' : '(sin token)'
+    );
 
     return config;
   },
