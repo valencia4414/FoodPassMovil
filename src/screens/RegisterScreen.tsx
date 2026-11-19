@@ -28,6 +28,7 @@ export default function RegisterScreen({ navigation }: any) {
   const { login } = useAuth();
   const [name, setName] = useState('');
   const [documento, setDocumento] = useState(''); // <--- Nuevo estado para la cédula
+  const [ficha, setFicha] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptPolicy, setAcceptPolicy] = useState(false);
@@ -35,6 +36,7 @@ export default function RegisterScreen({ navigation }: any) {
   
   const [nameFocused, setNameFocused] = useState(false);
   const [documentoFocused, setDocumentoFocused] = useState(false); // <--- Focus para el documento
+  const [fichaFocused, setFichaFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
@@ -57,6 +59,22 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert(
         'Nombre inválido',
         'Por favor ingresa un nombre real válido (mínimo 3 caracteres, solo letras y espacios).'
+      );
+      return;
+    }
+
+
+    // 2.5. Validación de ficha (obligatoria, solo números, máximo 10 dígitos)
+    const cleanFicha = ficha.trim();
+    if (!cleanFicha) {
+      Alert.alert('Ficha requerida', 'El número de ficha es obligatorio.');
+      return;
+    }
+    const fichaRegex = /^\d{1,10}$/;
+    if (!fichaRegex.test(cleanFicha)) {
+      Alert.alert(
+        'Ficha inválida',
+        'La ficha debe contener solo números y tener máximo 10 dígitos.'
       );
       return;
     }
@@ -110,6 +128,7 @@ export default function RegisterScreen({ navigation }: any) {
       const response = await apiClient.post('/api/auth/register', {
         name: cleanName,
         documento: cleanDoc,
+        ficha: cleanFicha,
         email: cleanEmail.toLowerCase(),
         password: cleanPassword,
       });
@@ -216,6 +235,31 @@ export default function RegisterScreen({ navigation }: any) {
                   onFocus={() => setDocumentoFocused(true)}
                   onBlur={() => setDocumentoFocused(false)}
                   keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+
+            {/* Campo de Ficha */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>NÚMERO DE FICHA</Text>
+              <View style={[styles.inputWrapper, fichaFocused && styles.inputWrapperFocused]}>
+                <MaterialIcons
+                  name="confirmation-number"
+                  size={20}
+                  color={fichaFocused ? Colors.tertiary : Colors.onSurfaceVariant}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ficha SENA (máx. 10 dígitos)"
+                  placeholderTextColor={Colors.onSurfaceVariant + '80'}
+                  value={ficha}
+                  onChangeText={(t) => setFicha(t.replace(/[^0-9]/g, '').slice(0, 10))}
+                  onFocus={() => setFichaFocused(true)}
+                  onBlur={() => setFichaFocused(false)}
+                  keyboardType="numeric"
+                  maxLength={10}
                 />
               </View>
             </View>

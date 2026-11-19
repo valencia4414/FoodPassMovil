@@ -19,7 +19,6 @@ import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import HistorialScreen from '../screens/HistorialScreen';
 import CanjeScreen from '../screens/CanjeScreen';
-import PagosScreen from '../screens/PagosScreen';
 import PerfilScreen from '../screens/PerfilScreen';
 import SecurityScreen from '../screens/SecurityScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
@@ -43,7 +42,6 @@ function MainTabs() {
             Menú: 'restaurant-menu',
             Historial: 'history',
             Canje: 'qr-code-scanner',
-            Pagos: 'payments',
             Perfil: 'person',
           };
           const iconName = iconMap[route.name] || 'circle';
@@ -73,7 +71,6 @@ function MainTabs() {
       <Tab.Screen name="Menú" component={MenuScreen} />
       <Tab.Screen name="Historial" component={HistorialScreen} />
       <Tab.Screen name="Canje" component={CanjeScreen} />
-      <Tab.Screen name="Pagos" component={PagosScreen} />
       <Tab.Screen name="Perfil" component={PerfilScreen} />
     </Tab.Navigator>
   );
