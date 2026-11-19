@@ -1,5 +1,4 @@
 // src/navigation/AppNavigator.tsx
-//
 // Este archivo configura TODA la navegación de la app.
 
 import React from 'react';
@@ -15,16 +14,16 @@ import { useAuth } from '../context/AuthContext';
 
 // Importamos todas las pantallas
 import LoginScreen from '../screens/LoginScreen';
+import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import MenuScreen from '../screens/MenuScreen';
 import HistorialScreen from '../screens/HistorialScreen';
 import CanjeScreen from '../screens/CanjeScreen';
-import PagosScreen from '../screens/PagosScreen';
 import PerfilScreen from '../screens/PerfilScreen';
 import SecurityScreen from '../screens/SecurityScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import { apiClient } from '../services/apiClient';
+import PointsScreen from '../screens/PointsScreen';
 import { Colors } from '../theme/colors';
 
 // Creamos los navegadores
@@ -37,13 +36,12 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ color, size }) => {
           const iconMap: Record<string, keyof typeof MaterialIcons.glyphMap> = {
             Inicio: 'home',
             Menú: 'restaurant-menu',
             Historial: 'history',
             Canje: 'qr-code-scanner',
-            Pagos: 'payments',
             Perfil: 'person',
           };
           const iconName = iconMap[route.name] || 'circle';
@@ -73,7 +71,6 @@ function MainTabs() {
       <Tab.Screen name="Menú" component={MenuScreen} />
       <Tab.Screen name="Historial" component={HistorialScreen} />
       <Tab.Screen name="Canje" component={CanjeScreen} />
-      <Tab.Screen name="Pagos" component={PagosScreen} />
       <Tab.Screen name="Perfil" component={PerfilScreen} />
     </Tab.Navigator>
   );
@@ -97,7 +94,7 @@ const loadingStyles = StyleSheet.create({
 });
 
 export default function AppNavigator() {
-  const { isAuth, isLoading, login } = useAuth();
+  const { isAuth, isLoading } = useAuth();
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -111,6 +108,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Security" component={SecurityScreen} />
             <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
+            <Stack.Screen name="Points" component={PointsScreen} />
+            <Stack.Screen name="PointsRewards" component={PointsScreen} />
           </>
         ) : (
           <>
@@ -119,54 +118,12 @@ export default function AppNavigator() {
                 <LoginScreen
                   initialEmail={route.params?.email}
                   onForgotPassword={() => navigation.navigate('ForgotPassword')}
-                  onLogin={async (enteredEmail?: string, enteredPassword?: string) => {
-                    const cleanEmail = enteredEmail && enteredEmail.includes('@') ? enteredEmail.trim() : 'carlos@soy.sena.edu.co';
-                    const cleanPassword = enteredPassword || '123456';
-
-                    try {
-                      const response = await apiClient.post('/auth/login', {
-                        email: cleanEmail,
-                        password: cleanPassword,
-                      });
-
-                      if (response.data?.success && response.data?.data?.token) {
-                        const { token, user } = response.data.data;
-                        await login(token, {
-                          id: String(user.id || 'usr_001'),
-                          name: user.name || 'Carlos Aprendiz',
-                          email: user.email || cleanEmail,
-                          role: user.role || 'beneficiario',
-                          plan: user.membresia || 'Premium',
-                        });
-                        return;
-                      }
-                    } catch (apiErr) {
-                      console.log('[AppNavigator] Conexión directa a API no completada, utilizando sesión local para desarrollo:', apiErr);
-                    }
-
-                    // Fallback para entorno offline o pruebas
-                    const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJjYXJsb3NAc295LnNlbmEuZWR1LmNvIiwicm9sZSI6ImJlbmVmaWNpYXJpbyIsImlhdCI6MTc5MjAzMDc2NiwiZXhwIjoxNzk0NjIyNzY2fQ.aJLgcFM3RkLzOT4N4XiuiEha9iP0dKo8KQ1ZSZ_O4xQ';
-                    const validUser = {
-                      id: 4,
-                      name: 'Carlos Aprendiz',
-                      email: cleanEmail,
-                      role: 'beneficiario',
-                      plan: 'Premium',
-                    };
-
-                    await login(validToken, {
-                        ...validUser,
-                         id: String(validUser.id),
-                    });
-                    
-
-
-                    await login(validToken, validUser);
-
-                  }}
+                  onNavigateRegister={() => navigation.navigate('Register')}
                 />
               )}
             </Stack.Screen>
+
+            <Stack.Screen name="Register" component={RegisterScreen} />
 
             <Stack.Screen name="ForgotPassword">
               {({ navigation }: any) => (

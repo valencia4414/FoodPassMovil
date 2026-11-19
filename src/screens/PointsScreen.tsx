@@ -1,22 +1,29 @@
 // src/screens/PointsScreen.tsx
 
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, FlatList, StyleSheet, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
 import { COLORS } from '../styles/colors';
 import PointsCard from '../components/PointsCard';
 import RewardItem from '../components/RewardItem';
 import { rewardsData } from '../data/rewards';
+import { useAuth } from '../context/AuthContext';
 
 const PointsScreen = () => {
-  // Simulamos los puntos del usuario. Más tarde esto vendrá de una base de datos.
-  const userPoints = 1250;
+  const navigation = useNavigation<any>();
+  const { userData } = useAuth();
+  const userPoints = Number(userData?.puntos_fp ?? 1250);
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.dark} />
+      <StatusBar barStyle="light-content" />
       
       {/* Encabezado superior */}
       <View style={styles.header}>
+        <TouchableOpacity style={{ marginRight: 12 }} onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Mis Puntos</Text>
       </View>
 
@@ -47,6 +54,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dark,
     paddingVertical: 20,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },

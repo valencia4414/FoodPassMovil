@@ -1,10 +1,10 @@
 // src/services/orderService.ts
 //
-// Servicio de consulta de pedidos (T13 - RFM14).
+// Servicio de consulta y creación de pedidos (T13 - RFM14 / T09).
 // Provee la función para consultar intermitentemente (Polling) el estado del pedido
-// activo a través del endpoint GET /api/pedidos/:id/status.
+// y la función para enviar el carrito a la base de datos de MySQL.
 
-import { apiClient } from './apiClient';
+import { apiClient, getToken } from './apiClient';
 
 export type OrderStatusType = 'pendiente' | 'en_preparacion' | 'listo' | 'entregado' | 'cancelado';
 
@@ -21,6 +21,11 @@ export interface OrderStatusResponse {
   isSimulated?: boolean;
 }
 
+interface OrderStatusApiEnvelope {
+  success?: boolean;
+  data?: OrderStatusResponse;
+}
+
 // Mapeo amigable de etiquetas legibles por el usuario según T13:
 // "Mostrar 'En preparación', 'Listo', etc."
 export const ORDER_STATUS_LABELS: Record<OrderStatusType, string> = {
@@ -30,6 +35,42 @@ export const ORDER_STATUS_LABELS: Record<OrderStatusType, string> = {
   entregado: 'Entregado',
   cancelado: 'Cancelado',
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isOrderStatusResponse(value: unknown): value is OrderStatusResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (typeof value.id === 'string' || typeof value.id === 'number') &&
+    typeof value.estado === 'string' &&
+    Object.prototype.hasOwnProperty.call(ORDER_STATUS_LABELS, value.estado)
+  );
+}
+
+function normalizeOrderStatusResponse(
+  response: OrderStatusResponse | OrderStatusApiEnvelope
+): OrderStatusResponse | null {
+  const data = isOrderStatusResponse(response)
+    ? response
+    : isRecord(response) && isOrderStatusResponse(response.data)
+      ? response.data
+      : null;
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    ...data,
+    estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado],
+    isSimulated: false,
+  };
+}
 
 // Almacén en memoria de pedidos para pruebas locales o fallback en caso de red sin backend
 const localSimulatedOrders: Record<string, OrderStatusResponse> = {
@@ -60,7 +101,7 @@ const localSimulatedOrders: Record<string, OrderStatusResponse> = {
 /**
  * Consulta el estado de un pedido (RFM14 / T13).
  * Intenta consultar el endpoint real GET /api/pedidos/:id/status.
- * Si el backend está disponible (Laravel + MySQL), refleja el cambio en la BD al instante.
+ * Si el backend está disponible (Node.js + MySQL), refleja el cambio en la BD al instante.
  * Si no hay conexión al backend, responde con el estado local simulado.
  */
 export async function getOrderStatus(orderId: number | string): Promise<OrderStatusResponse> {
@@ -69,38 +110,28 @@ export async function getOrderStatus(orderId: number | string): Promise<OrderSta
   try {
     // Intentar consultar el endpoint en el backend
     // Probamos tanto /api/pedidos/:id/status como /pedidos/:id/status
-    const response = await apiClient.get<OrderStatusResponse>(`/api/pedidos/${idStr}/status`, {
+    const response = await apiClient.get<OrderStatusResponse | OrderStatusApiEnvelope>(`/api/pedidos/${idStr}/status`, {
       timeout: 3500,
     });
 
-    if (response?.data && response.data.estado) {
-      const data = response.data;
-      return {
-        ...data,
-        estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado] || data.estado,
-        isSimulated: false,
-      };
+    const data = normalizeOrderStatusResponse(response.data);
+    if (data) {
+      return data;
     }
   } catch (err: any) {
-    // Si el endpoint con prefijo /api falla por configuración de proxy o baseUrl, probar sin /api
     try {
-      const fallbackResponse = await apiClient.get<OrderStatusResponse>(`/pedidos/${idStr}/status`, {
+      const fallbackResponse = await apiClient.get<OrderStatusResponse | OrderStatusApiEnvelope>(`/pedidos/${idStr}/status`, {
         timeout: 3500,
       });
-      if (fallbackResponse?.data && fallbackResponse.data.estado) {
-        const data = fallbackResponse.data;
-        return {
-          ...data,
-          estado_label: data.estado_label || ORDER_STATUS_LABELS[data.estado] || data.estado,
-          isSimulated: false,
-        };
+      const data = normalizeOrderStatusResponse(fallbackResponse.data);
+      if (data) {
+        return data;
       }
     } catch {
-      // Backend no disponible en esta URL, usar fallback simulado para no romper la app
+      // Backend no disponible en esta URL, usar fallback simulado
     }
   }
 
-  // Fallback simulado: permite probar el polling y los cambios de estado incluso sin MySQL corriendo
   if (!localSimulatedOrders[idStr]) {
     localSimulatedOrders[idStr] = {
       id: orderId,
@@ -119,8 +150,7 @@ export async function getOrderStatus(orderId: number | string): Promise<OrderSta
 }
 
 /**
- * Actualiza el estado simulado en memoria para facilitar pruebas locales
- * y verificar que el polling reacciona en tiempo real a los cambios de estado.
+ * Actualiza el estado simulado en memoria para facilitar pruebas locales.
  */
 export function setSimulatedOrderStatus(orderId: number | string, nuevoEstado: OrderStatusType): OrderStatusResponse {
   const idStr = String(orderId);
@@ -141,4 +171,34 @@ export function setSimulatedOrderStatus(orderId: number | string, nuevoEstado: O
 
   localSimulatedOrders[idStr] = updated;
   return updated;
+}
+
+export interface CreateOrderPayload {
+  restaurante_id?: number;
+  metodo_pago?: string;
+  total: number;
+  items: {
+    platillo_id: number;
+    cantidad: number;
+    precio: number;
+  }[];
+}
+
+/**
+ * Crea un nuevo pedido enviando los datos del carrito al backend (T09).
+ * Inyecta un token de desarrollo de respaldo para asegurar que pase el authMiddleware.
+ */
+export async function createOrder(payload: CreateOrderPayload) {
+  const token = await getToken();
+  if (!token) {
+    throw new Error('Debes iniciar sesión para realizar un pedido.');
+  }
+
+  try {
+    const response = await apiClient.post('/pedidos', payload);
+    return response.data?.data || response.data;
+  } catch (err: any) {
+    console.error('[orderService] Error al crear pedido:', err?.response?.data || err);
+    throw new Error(err?.response?.data?.message || 'No se pudo procesar el pedido con el servidor.');
+  }
 }

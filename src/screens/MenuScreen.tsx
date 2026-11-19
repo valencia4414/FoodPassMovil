@@ -1,17 +1,22 @@
 // src/screens/MenuScreen.tsx
-import React, { useState } from 'react';
+//
+// Pantalla de Menú Digital integrada con la API REST y MySQL (T06).
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
   Image,
   ScrollView,
   Dimensions,
   TextInput,
   Modal,
   Pressable,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,73 +24,26 @@ import Header from '../components/shared/Header';
 import CartModal from '../components/shared/CartModal';
 import { Colors, BorderRadius } from '../theme/colors';
 import { useCart } from '../context/CartContext';
+import { apiClient } from '../services/apiClient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 40 - 12) / 2;
 
-const categories = ['Todos', 'Entradas', 'Plato Fuerte', 'Postres'];
+type MenuItem = {
+  id: string | number;
+  name: string;
+  description: string;
+  price: string | number;
+  badge?: string | null;
+  badgeType?: string;
+  image: string;
+  category: string;
+};
 
-const menuItems = [
-  {
-    id: '1',
-    name: 'Artisan Salad Bowl',
-    description: 'Mezcla orgánica de hojas verdes con salmón ahumado.',
-    price: '$18.25',
-    badge: 'Fresh',
-    badgeType: 'green',
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400',
-    category: 'Entradas',
-  },
-  {
-    id: '2',
-    name: 'FoodPass Signature',
-    description: 'Hamburguesa de res premium con queso artesanal.',
-    price: '$14.50',
-    badge: null,
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
-    category: 'Plato Fuerte',
-  },
-  {
-    id: '3',
-    name: 'Pasta del Huerto',
-    description: 'Pasta hecha a mano con tomates cherry orgánicos.',
-    price: '$16.00',
-    badge: null,
-    image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400',
-    category: 'Plato Fuerte',
-  },
-  {
-    id: '4',
-    name: 'Morning Delight',
-    description: 'Tostada de masa madre con aguacate y huevo pochado.',
-    price: '$12.75',
-    badge: 'Top Rated',
-    badgeType: 'orange',
-    image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400',
-    category: 'Entradas',
-  },
-  {
-    id: '5',
-    name: 'Kyoto Ramen Bowl',
-    description: 'Caldo tonkotsu cocido por 12 horas.',
-    price: '$21.50',
-    badge: null,
-    image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400',
-    category: 'Plato Fuerte',
-  },
-  {
-    id: '6',
-    name: 'Tiramisú Artesanal',
-    description: 'Postre italiano tradicional con café espresso.',
-    price: '$9.50',
-    badge: 'Nuevo',
-    badgeType: 'green',
-    image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400',
-    category: 'Postres',
-  },
-];
-
-type MenuItem = typeof menuItems[0];
+type Categoria = {
+  id: string | number;
+  nombre: string;
+};
 
 export default function MenuScreen() {
   const [activeCategory, setActiveCategory] = useState('Todos');
@@ -96,10 +54,91 @@ export default function MenuScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
 
-  const filteredItems = menuItems.filter(item => {
-    const matchesCategory = activeCategory === 'Todos' || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchText.toLowerCase());
+  // Estados de datos dinámicos (T06)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(['Todos']);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Cargar platillos y categorías desde la API (GET /api/platillos y /api/categorias)
+  const fetchMenuData = useCallback(async (refresh = false) => {
+    if (refresh) setIsRefreshing(true);
+    else setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const [platillosRes, categoriasRes] = await Promise.all([
+        apiClient.get('/api/platillos').catch(() => null),
+        apiClient.get('/api/categorias').catch(() => null),
+      ]);
+
+      // Procesar platillos
+      const rawPlatillos =
+        platillosRes?.data?.data || platillosRes?.data || [];
+      const formattedPlatillos: MenuItem[] = rawPlatillos.map((p: any) => ({
+        id: p.id || p._id,
+        name: p.name || p.nombre,
+        description: p.description || p.descripcion || '',
+        price: typeof p.price === 'number' ? `$${p.price.toFixed(2)}` : p.price || '$0.00',
+        badge: p.badge || null,
+        badgeType: p.badgeType || 'green',
+        image: p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
+        category: p.category || p.categoria || 'Plato Fuerte',
+      }));
+
+      setMenuItems(formattedPlatillos);
+
+      // Procesar categorías
+      const rawCategorias =
+        categoriasRes?.data?.data || categoriasRes?.data || [];
+      const catNames = rawCategorias.map((c: any) => c.nombre || c.name);
+      if (catNames.length > 0) {
+        setCategories(['Todos', ...catNames]);
+      } else {
+        setCategories(['Todos', 'Entradas', 'Plato Fuerte', 'Postres']);
+      }
+    } catch (err: any) {
+      console.warn('[MenuScreen] Error al conectar con el servidor:', err?.message || err);
+      setErrorMessage('No se pudo conectar con el servidor. Mostrando catálogo local de respaldo.');
+      // Fallback estático de emergencia si el backend no responde
+      setMenuItems([
+        {
+          id: '1',
+          name: 'Artisan Salad Bowl',
+          description: 'Mezcla orgánica de hojas verdes con salmón ahumado.',
+          price: '$18.25',
+          badge: 'Fresh',
+          badgeType: 'green',
+          image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400',
+          category: 'Entradas',
+        },
+        {
+          id: '2',
+          name: 'FoodPass Signature',
+          description: 'Hamburguesa de res premium con queso artesanal.',
+          price: '$14.50',
+          image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
+          category: 'Plato Fuerte',
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMenuData();
+  }, [fetchMenuData]);
+
+  const filteredItems = menuItems.filter((item) => {
+    const matchesCategory =
+      activeCategory === 'Todos' ||
+      item.category?.toLowerCase() === activeCategory.toLowerCase();
+    const matchesSearch =
+      item.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchText.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -108,26 +147,44 @@ export default function MenuScreen() {
       <View style={styles.cardImageContainer}>
         <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
         {item.badge && (
-          <View style={[styles.badge, item.badgeType === 'green' ? styles.badgeGreen : styles.badgeOrange]}>
-            <Text style={[styles.badgeText, item.badgeType === 'green' ? styles.badgeTextGreen : styles.badgeTextOrange]}>
-              {item.badge.toUpperCase()}
+          <View
+            style={[
+              styles.badge,
+              item.badgeType === 'green' ? styles.badgeGreen : styles.badgeOrange,
+            ]}
+          >
+            <Text
+              style={[
+                styles.badgeText,
+                item.badgeType === 'green' ? styles.badgeTextGreen : styles.badgeTextOrange,
+              ]}
+            >
+              {String(item.badge).toUpperCase()}
             </Text>
           </View>
         )}
       </View>
       <View style={styles.cardContent}>
-        <Text style={styles.cardName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
+        <Text style={styles.cardName} numberOfLines={2}>
+          {item.name}
+        </Text>
+        <Text style={styles.cardDescription} numberOfLines={2}>
+          {item.description}
+        </Text>
         <View style={styles.cardFooter}>
           <Text style={styles.cardPrice}>{item.price}</Text>
           <View style={styles.cardActionsRow}>
-            <TouchableOpacity style={styles.selectButton} activeOpacity={0.8} onPress={() => setSelectedItem(item)}>
+            <TouchableOpacity
+              style={styles.selectButton}
+              activeOpacity={0.8}
+              onPress={() => setSelectedItem(item)}
+            >
               <Text style={styles.selectButtonText}>Ver</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickAddButton}
               activeOpacity={0.8}
-              onPress={() => addItem(item)}
+              onPress={() => addItem(item as any)}
             >
               <MaterialIcons name="add-shopping-cart" size={18} color={Colors.onPrimaryContainer} />
             </TouchableOpacity>
@@ -151,12 +208,18 @@ export default function MenuScreen() {
 
         {isSearching && (
           <View style={styles.fullSearchBar}>
-            <TouchableOpacity onPress={() => { setIsSearching(false); setSearchText(''); }}>
+            <TouchableOpacity
+              onPress={() => {
+                setIsSearching(false);
+                setSearchText('');
+              }}
+            >
               <MaterialIcons name="arrow-back" size={24} color={Colors.primary} />
             </TouchableOpacity>
             <TextInput
               style={styles.inputField}
               placeholder="¿Qué te apetece hoy?"
+              placeholderTextColor="#999"
               autoFocus
               value={searchText}
               onChangeText={setSearchText}
@@ -170,11 +233,25 @@ export default function MenuScreen() {
         )}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => fetchMenuData(true)}
+            colors={[Colors.primaryContainer]}
+            tintColor={Colors.primaryContainer}
+          />
+        }
+      >
         <View style={styles.featuredBanner}>
           <View style={styles.featuredOverlay}>
-            <View style={styles.chefBadge}><Text style={styles.chefBadgeText}>RECOMENDACIÓN DEL CHEF</Text></View>
-            <Text style={styles.featuredTitle}>Corte Artisan{'\n'}con Finas Hierbas</Text>
+            <View style={styles.chefBadge}>
+              <Text style={styles.chefBadgeText}>RECOMENDACIÓN DEL CHEF</Text>
+            </View>
+            <Text style={styles.featuredTitle}>
+              Corte Artisan{'\n'}con Finas Hierbas
+            </Text>
             <View style={styles.featuredFooter}>
               <TouchableOpacity
                 style={styles.featuredButton}
@@ -187,7 +264,7 @@ export default function MenuScreen() {
                     price: '$45.50',
                     image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400',
                     category: 'Plato Fuerte',
-                  });
+                  } as any);
                 }}
               >
                 <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
@@ -198,30 +275,59 @@ export default function MenuScreen() {
           </View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContainer} style={styles.filtersScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContainer}
+          style={styles.filtersScroll}
+        >
           {categories.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[styles.filterChip, activeCategory === cat && styles.filterChipActive]}
               onPress={() => setActiveCategory(cat)}
             >
-              <Text style={[styles.filterChipText, activeCategory === cat && styles.filterChipTextActive]}>{cat}</Text>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeCategory === cat && styles.filterChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <FlatList
-          data={filteredItems}
-          renderItem={renderMenuCard}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={[styles.listContent, totalItems > 0 && { paddingBottom: 80 }]}
-          scrollEnabled={false}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No se encontraron platos.</Text>
-          }
-        />
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <MaterialIcons name="info-outline" size={16} color={Colors.primary} />
+            <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.loadingText}>Cargando platillos del menú...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredItems}
+            renderItem={renderMenuCard}
+            keyExtractor={(item, index) => String(item.id || index)}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            contentContainerStyle={[
+              styles.listContent,
+              totalItems > 0 && { paddingBottom: 80 },
+            ]}
+            scrollEnabled={false}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No se encontraron platos.</Text>
+            }
+          />
+        )}
       </ScrollView>
 
       {totalItems > 0 && (
@@ -279,7 +385,7 @@ export default function MenuScreen() {
                   activeOpacity={0.8}
                   onPress={() => {
                     if (selectedItem) {
-                      addItem(selectedItem);
+                      addItem(selectedItem as any);
                       setSelectedItem(null);
                     }
                   }}
@@ -293,10 +399,7 @@ export default function MenuScreen() {
         </Pressable>
       </Modal>
 
-      <CartModal
-        visible={cartModalOpen}
-        onClose={() => setCartModalOpen(false)}
-      />
+      <CartModal visible={cartModalOpen} onClose={() => setCartModalOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -304,30 +407,120 @@ export default function MenuScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
   headerWrapper: { position: 'relative', zIndex: 100 },
-  searchActivator: { position: 'absolute', right: 85, top: 10, width: 45, height: 45, borderRadius: 22, zIndex: 101 },
-  fullSearchBar: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: 70, zIndex: 102, elevation: 4 },
+  searchActivator: {
+    position: 'absolute',
+    right: 85,
+    top: 10,
+    width: 45,
+    height: 45,
+    borderRadius: 22,
+    zIndex: 101,
+  },
+  fullSearchBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    height: 70,
+    zIndex: 102,
+    elevation: 4,
+  },
   inputField: { flex: 1, marginLeft: 15, fontSize: 16, color: '#000', fontWeight: '500' },
-  featuredBanner: { marginHorizontal: 20, marginTop: 16, height: 160, borderRadius: BorderRadius.xxxl, backgroundColor: Colors.inverseSurface, overflow: 'hidden', marginBottom: 16 },
-  featuredOverlay: { flex: 1, backgroundColor: 'rgba(39, 53, 23, 0.75)', padding: 20, justifyContent: 'space-between' },
-  chefBadge: { backgroundColor: Colors.tertiaryContainer, paddingHorizontal: 10, paddingVertical: 3, borderRadius: BorderRadius.full, alignSelf: 'flex-start' },
-  chefBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.onTertiaryContainer, letterSpacing: 1 },
-  featuredTitle: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5, lineHeight: 28 },
+  featuredBanner: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    height: 160,
+    borderRadius: BorderRadius.xxxl,
+    backgroundColor: Colors.inverseSurface,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  featuredOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(39, 53, 23, 0.75)',
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  chefBadge: {
+    backgroundColor: Colors.tertiaryContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    alignSelf: 'flex-start',
+  },
+  chefBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.onTertiaryContainer,
+    letterSpacing: 1,
+  },
+  featuredTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.5,
+    lineHeight: 28,
+  },
   featuredFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  featuredButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primaryContainer, paddingHorizontal: 16, paddingVertical: 10, borderRadius: BorderRadius.xl },
+  featuredButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primaryContainer,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.xl,
+  },
   featuredButtonText: { fontSize: 13, fontWeight: '700', color: Colors.onPrimaryContainer },
   featuredPrice: { fontSize: 24, fontWeight: '800', color: '#fff' },
   filtersScroll: { maxHeight: 50, marginBottom: 8 },
   filtersContainer: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: BorderRadius.full, backgroundColor: Colors.surfaceContainer },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainer,
+  },
   filterChipActive: { backgroundColor: Colors.surfaceContainerLowest, elevation: 3 },
   filterChipText: { fontSize: 13, fontWeight: '600', color: Colors.onSurfaceVariant },
   filterChipTextActive: { color: Colors.onSurface, fontWeight: '700' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff8e1',
+    marginHorizontal: 20,
+    padding: 10,
+    borderRadius: BorderRadius.lg,
+    marginBottom: 10,
+  },
+  errorBannerText: { fontSize: 12, color: '#f57c00', flex: 1 },
+  loadingContainer: { paddingVertical: 40, alignItems: 'center' },
+  loadingText: { marginTop: 10, fontSize: 13, color: Colors.onSurfaceVariant },
   listContent: { paddingHorizontal: 20, paddingBottom: 20 },
   row: { gap: 12, marginBottom: 12 },
-  card: { width: CARD_WIDTH, backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, overflow: 'hidden', elevation: 3 },
+  card: {
+    width: CARD_WIDTH,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xxl,
+    overflow: 'hidden',
+    elevation: 3,
+  },
   cardImageContainer: { height: 130 },
   cardImage: { width: '100%', height: '100%' },
-  badge: { position: 'absolute', top: 10, left: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
+  badge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
   badgeGreen: { backgroundColor: Colors.tertiaryContainer },
   badgeOrange: { backgroundColor: Colors.primaryContainer },
   badgeText: { fontSize: 8, fontWeight: '700', letterSpacing: 1 },
@@ -339,31 +532,105 @@ const styles = StyleSheet.create({
   cardFooter: { gap: 8 },
   cardPrice: { fontSize: 20, fontWeight: '800', color: Colors.primaryContainer },
   cardActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  selectButton: { flex: 1, backgroundColor: Colors.surfaceContainerLow, paddingVertical: 9, borderRadius: BorderRadius.lg, alignItems: 'center' },
+  selectButton: {
+    flex: 1,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+  },
   selectButtonText: { fontSize: 12, fontWeight: '700', color: Colors.onSurface },
-  quickAddButton: { backgroundColor: Colors.primaryContainer, width: 36, height: 36, borderRadius: BorderRadius.lg, justifyContent: 'center', alignItems: 'center' },
+  quickAddButton: {
+    backgroundColor: Colors.primaryContainer,
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   floatingBarWrapper: { position: 'absolute', bottom: 12, left: 16, right: 16, zIndex: 99 },
-  floatingBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxl, paddingVertical: 12, paddingHorizontal: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 8 },
+  floatingBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.inverseSurface,
+    borderRadius: BorderRadius.xxl,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   floatingBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  floatingBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryContainer, borderRadius: BorderRadius.full, paddingHorizontal: 8, paddingVertical: 4, gap: 4 },
+  floatingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
   floatingBadgeText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
   floatingTexts: { justifyContent: 'center' },
   floatingItemsLabel: { fontSize: 11, color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' },
   floatingTotalPrice: { fontSize: 15, fontWeight: '800', color: '#ffffff' },
-  floatingBarRight: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryContainer, borderRadius: BorderRadius.xl, paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  floatingBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 4,
+  },
   floatingCheckoutText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
   emptyText: { textAlign: 'center', marginTop: 20, color: Colors.onSurfaceVariant },
 });
 
 const popupStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 30 },
-  popup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 24, width: '100%', maxWidth: 360, position: 'relative' },
-  closeBtn: { position: 'absolute', top: 12, right: 12, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  popup: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xxl,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    position: 'relative',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   image: { width: '100%', height: 180, borderRadius: BorderRadius.xl, marginBottom: 16 },
   name: { fontSize: 20, fontWeight: '800', color: Colors.onSurface, marginBottom: 8 },
   description: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 16 },
   priceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   price: { fontSize: 28, fontWeight: '800', color: Colors.primaryContainer },
-  addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primaryContainer, paddingVertical: 14, borderRadius: BorderRadius.xl },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primaryContainer,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+  },
   addButtonText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimaryContainer },
 });

@@ -3,8 +3,9 @@
 // Pantalla de perfil del usuario (T11 - RFM12).
 // Conectada dinámicamente con GET /api/users/me y PUT /api/users/me.
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -30,6 +31,10 @@ import SoporteChatScreen from './SoporteChatScreen';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { apiClient } from '../services/apiClient';
+import {
+  getPushNotificationsEnabled,
+  setPushNotificationsEnabled,
+} from '../services/pushNotificationService';
 
 // Tipo para los items del menú de configuración
 type SettingItem = {
@@ -44,12 +49,12 @@ type SettingItem = {
 
 // Datos del menú digital para modal de preferencias
 const menuPrefsItems = [
-  { id: '1', name: 'Artisan Salad Bowl', description: 'Mezcla orgánica de hojas verdes con salmón ahumado.', price: '$18.25', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
-  { id: '2', name: 'FoodPass Signature', description: 'Hamburguesa de res premium con queso artesanal.', price: '$14.50', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
-  { id: '3', name: 'Pasta del Huerto', description: 'Pasta hecha a mano con tomates cherry orgánicos.', price: '$16.00', image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400', category: 'Plato Fuerte' },
-  { id: '4', name: 'Morning Delight', description: 'Tostada de masa madre con aguacate y huevo pochado.', price: '$12.75', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400', category: 'Entradas' },
-  { id: '5', name: 'Kyoto Ramen Bowl', description: 'Caldo tonkotsu cocido por 12 horas.', price: '$21.50', image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400', category: 'Plato Fuerte' },
-  { id: '6', name: 'Tiramisú Artesanal', description: 'Postre italiano tradicional con café espresso.', price: '$9.50', image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Postres' },
+  { id: '1', name: 'Arroz con pollo', description: 'Delicioso arroz con pollo', price: '$8500', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
+  { id: '2', name: 'Carne de cerdo', description: 'Carne de cerdo a la parrilla', price: '$9000', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
+  { id: '3', name: 'Pollo Guisado', description: 'Presa de pollo en salsa de tomate', price: '$8000', image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400', category: 'Plato Fuerte' },
+  { id: '4', name: 'Carne de res', description: 'Bistec a la parrilla', price: '$12000', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400', category: 'Entradas' },
+  { id: '5', name: 'Pure de papas', description: 'Pure de papas con mantequilla y especias', price: '$3000', image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400', category: 'Plato Fuerte' },
+  { id: '6', name: 'Frijoles', description: 'Frijoles refritos con cebolla y cilantro', price: '$2500', image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Postres' },
 ];
 type MenuPrefItem = typeof menuPrefsItems[0];
 
@@ -75,14 +80,43 @@ export default function PerfilScreen() {
   const { logout, userData, updateUser } = useAuth();
   const { addItem } = useCart();
 
+  useEffect(() => {
+    getPushNotificationsEnabled()
+      .then(setNotificationsEnabled)
+      .catch((error) => {
+        console.error('[PerfilScreen] No se pudo cargar la preferencia push:', error);
+      });
+  }, []);
+
+  const handleNotificationsToggle = async (enabled: boolean) => {
+    try {
+      const isEnabled = await setPushNotificationsEnabled(enabled);
+      setNotificationsEnabled(isEnabled);
+
+      if (enabled && !isEnabled) {
+        Alert.alert(
+          'Notificaciones no habilitadas',
+          'Activa los permisos de notificación del dispositivo para recibir avisos de tus pedidos.'
+        );
+      }
+    } catch (error) {
+      console.error('[PerfilScreen] No se pudo actualizar la preferencia push:', error);
+      Alert.alert(
+        'No se pudo actualizar',
+        error instanceof Error
+          ? error.message
+          : 'Verifica tu conexión e inténtalo de nuevo.'
+      );
+    }
+  };
+
   // Refs para usar siempre el valor más reciente sin recrear fetchProfile
-  // (evita el bucle infinito de peticiones a /users/me)
   const updateUserRef = useRef<any>(updateUser);
   const userDataRef = useRef<any>(userData);
   updateUserRef.current = updateUser;
   userDataRef.current = userData;
 
-  // 1. Estados de datos reales del perfil
+  // Estados de datos reales del perfil
   const [profileData, setProfileData] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -95,13 +129,20 @@ export default function PerfilScreen() {
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
-  // 2. Variables calculadas de visualización (declaradas UNA sola vez)
-  const userName: string = profileData?.name || userData?.name || 'Carlos Mendoza';
-  const userEmail: string = profileData?.email || userData?.email || 'carlos@foodpass.com';
+  // Variables calculadas de visualización
+  const userName: string = profileData?.name || userData?.name || 'Beneficiario';
+  const userEmail: string = profileData?.email || userData?.email || 'beneficiario@sena.edu.co';
   const userPhone: string = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
-  const userPoints: number = Number(profileData?.puntos_fp ?? 1240) || 0;
+  const userFicha: string = profileData?.ficha || (userData as any)?.ficha || '';
+  const userDocumento: string = profileData?.documento || (userData as any)?.documento || '';
+  const userPoints: number = Number(profileData?.puntos_fp ?? userData?.puntos_fp ?? 0) || 0;
+  const isBeneficiario: boolean =
+    profileData?.role === 'beneficiario' ||
+    userData?.role === 'beneficiario' ||
+    profileData?.rol_id === 7 ||
+    (userData as any)?.rol_id === 7;
   const userMembership: string =
-    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'Premium';
+    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'SENA Beneficiario';
 
   const userInitials =
     userName
@@ -110,9 +151,11 @@ export default function PerfilScreen() {
       .map((w: string) => w[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase() || 'CM';
+      .toUpperCase() || 'FP';
 
-  const userPlanText = `${userMembership} Member`;
+  const userPlanText = isBeneficiario
+    ? (userFicha ? `Beneficiario · Ficha ${userFicha}` : 'Beneficiario SENA')
+    : `${userMembership} Member`;
 
   // Consultar datos reales del usuario desde el backend (GET /api/users/me)
   const fetchProfile = useCallback(async (refresh = false) => {
@@ -124,7 +167,6 @@ export default function PerfilScreen() {
       if (response.data && response.data.success) {
         const u = response.data.data;
         setProfileData(u);
-        // Sincronizar contexto global
         if (u.name && updateUserRef.current) {
           await updateUserRef.current({
             name: u.name,
@@ -138,7 +180,6 @@ export default function PerfilScreen() {
       }
     } catch (err: any) {
       console.warn('[PerfilScreen] No se pudo cargar perfil desde API:', err?.message || err);
-      // Fallback a los datos de sesión solo si aún no hay datos
       setProfileData((prev: any) => prev ?? userDataRef.current ?? null);
     } finally {
       setIsLoadingProfile(false);
@@ -146,14 +187,12 @@ export default function PerfilScreen() {
     }
   }, []);
 
-  // useFocusEffect también se ejecuta al montar la pantalla
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
     }, [fetchProfile])
   );
 
-  // Preparar modal de edición con los datos actuales
   const handleOpenEditModal = () => {
     const currentName = profileData?.name || userData?.name || '';
     const currentTel = profileData?.telefono || (userData as any)?.telefono || '';
@@ -164,7 +203,6 @@ export default function PerfilScreen() {
     setPersonalInfoModalVisible(true);
   };
 
-  // Guardar cambios mediante PUT /api/users/me (T11 - RFM12)
   const handleSaveProfile = async () => {
     setEditError(null);
     setEditSuccess(null);
@@ -172,7 +210,6 @@ export default function PerfilScreen() {
     const trimmedName = editName.trim();
     const trimmedTel = editTelefono.trim();
 
-    // Validaciones en cliente
     if (!trimmedName || trimmedName.length < 2) {
       setEditError('El nombre completo es obligatorio (mínimo 2 caracteres).');
       return;
@@ -200,10 +237,8 @@ export default function PerfilScreen() {
 
       if (response.data && response.data.success) {
         const updated = response.data.data;
-        // 1. Actualizar estado local de la pantalla
         setProfileData(updated);
 
-        // 2. Actualizar estado global en AuthContext (Header, Dashboard, etc.)
         if (updateUserRef.current) {
           await updateUserRef.current({
             name: updated.name,
@@ -213,7 +248,6 @@ export default function PerfilScreen() {
 
         setEditSuccess('¡Perfil actualizado correctamente!');
 
-        // Cerrar modal automáticamente tras breve pausa para mostrar confirmación
         setTimeout(() => {
           setPersonalInfoModalVisible(false);
           setEditSuccess(null);
@@ -230,7 +264,6 @@ export default function PerfilScreen() {
     }
   };
 
-  // Secciones del menú de configuración adaptadas
   const dynamicSections: { title: string; items: SettingItem[] }[] = [
     {
       title: 'Mi Cuenta',
@@ -288,7 +321,6 @@ export default function PerfilScreen() {
           />
         }
       >
-        {/* TARJETA PRINCIPAL DEL PERFIL */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{userInitials}</Text>
@@ -308,24 +340,23 @@ export default function PerfilScreen() {
           <View style={styles.profileStats}>
             <View style={styles.profileStat}>
               <Text style={styles.profileStatNumber}>
-                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : 12}
+                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : (profileData?.total_pedidos ?? 0)}
               </Text>
               <Text style={styles.profileStatLabel}>PEDIDOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString()}</Text>
+              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString('es-CO')}</Text>
               <Text style={styles.profileStatLabel}>PUNTOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={[styles.profileStatNumber, { color: Colors.tertiary }]}>$1,450</Text>
-              <Text style={styles.profileStatLabel}>AHORRADO</Text>
+              <Text style={[styles.profileStatNumber, { color: Colors.tertiary }]}>{userFicha || 'SENA'}</Text>
+              <Text style={styles.profileStatLabel}>FICHA</Text>
             </View>
           </View>
         </View>
 
-        {/* SECCIONES DE CONFIGURACIÓN */}
         {dynamicSections.map((section) => (
           <View key={section.title} style={styles.settingsSection}>
             <Text style={styles.settingsSectionTitle}>{section.title.toUpperCase()}</Text>
@@ -344,7 +375,7 @@ export default function PerfilScreen() {
                         <SwitchField
                           label={item.label}
                           value={notificationsEnabled}
-                          onToggle={(val: boolean) => setNotificationsEnabled(val)}
+                          onToggle={handleNotificationsToggle}
                         />
                       </View>
                     </View>
@@ -400,7 +431,6 @@ export default function PerfilScreen() {
           </View>
         ))}
 
-        {/* BOTÓN CERRAR SESIÓN */}
         <TouchableOpacity style={styles.logoutButton} activeOpacity={0.8} onPress={() => logout()}>
           <MaterialIcons name="logout" size={20} color={Colors.error} />
           <Text style={styles.logoutText}>Cerrar sesión</Text>
@@ -409,7 +439,7 @@ export default function PerfilScreen() {
         <View style={{ height: 28 }} />
       </ScrollView>
 
-      {/* MODAL DE INFORMACIÓN PERSONAL (T11 - EDICIÓN Y GESTIÓN DE PERFIL) */}
+      {/* MODAL DE INFORMACIÓN PERSONAL (T11) */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -443,7 +473,6 @@ export default function PerfilScreen() {
               Actualiza tus datos de contacto registrados en FoodPass.
             </Text>
 
-            {/* Banner de Mensaje de Error */}
             {editError ? (
               <View style={styles.alertBoxError}>
                 <MaterialIcons name="error-outline" size={18} color={Colors.error} />
@@ -451,7 +480,6 @@ export default function PerfilScreen() {
               </View>
             ) : null}
 
-            {/* Banner de Mensaje de Éxito */}
             {editSuccess ? (
               <View style={styles.alertBoxSuccess}>
                 <MaterialIcons name="check-circle" size={18} color={Colors.tertiary} />
@@ -459,7 +487,6 @@ export default function PerfilScreen() {
               </View>
             ) : null}
 
-            {/* Formulario de Edición */}
             <View style={styles.formGroup}>
               <Text style={styles.inputLabel}>NOMBRE COMPLETO *</Text>
               <View style={styles.inputWrap}>
@@ -491,7 +518,36 @@ export default function PerfilScreen() {
               </View>
             </View>
 
-            {/* Correo Electrónico (Protegido - No editable) */}
+            <View style={styles.formGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.inputLabel}>NÚMERO DE FICHA (PROTEGIDO)</Text>
+                <MaterialIcons name="lock" size={12} color="#888" />
+              </View>
+              <View style={[styles.inputWrap, styles.inputDisabled]}>
+                <MaterialIcons name="confirmation-number" size={20} color="#888" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.formInput, { color: '#888' }]}
+                  value={userFicha || 'No registrada'}
+                  editable={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.inputLabel}>DOCUMENTO DE IDENTIDAD (PROTEGIDO)</Text>
+                <MaterialIcons name="lock" size={12} color="#888" />
+              </View>
+              <View style={[styles.inputWrap, styles.inputDisabled]}>
+                <MaterialIcons name="badge" size={20} color="#888" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.formInput, { color: '#888' }]}
+                  value={userDocumento || 'No registrado'}
+                  editable={false}
+                />
+              </View>
+            </View>
+
             <View style={styles.formGroup}>
               <View style={styles.fieldLabelRow}>
                 <Text style={styles.inputLabel}>CORREO ELECTRÓNICO (PROTEGIDO)</Text>
@@ -507,7 +563,6 @@ export default function PerfilScreen() {
               </View>
             </View>
 
-            {/* Botones de Acción */}
             <View style={styles.editButtonsRow}>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -749,45 +804,20 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   settingsGroup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, overflow: 'hidden' },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceContainerLow,
-  },
+  settingItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.surfaceContainerLow },
   settingItemLast: { borderBottomWidth: 0 },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
+  settingIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
   settingText: { flex: 1 },
   settingLabel: { fontSize: 14, fontWeight: '600', color: Colors.onSurface },
   settingDescription: { fontSize: 12, color: Colors.onSurfaceVariant, marginTop: 1 },
   settingBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full },
   settingBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.onPrimaryContainer, letterSpacing: 0.5 },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginHorizontal: 20,
-    marginTop: 8,
-    paddingVertical: 16,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.xl,
-  },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginHorizontal: 20, marginTop: 8, paddingVertical: 16, backgroundColor: Colors.errorContainer, borderRadius: BorderRadius.xl },
   logoutText: { fontSize: 15, fontWeight: '700', color: Colors.error },
-
-  // ESTILOS DE MODALES GENERALES
+  
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -797,7 +827,145 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
+  editModalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  editModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  editIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseIcon: {
+    padding: 4,
+  },
+  editModalSubtitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceVariant,
+    marginBottom: 20,
+  },
+  alertBoxError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+    marginBottom: 16,
+  },
+  alertTextError: {
+    color: Colors.error,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  alertBoxSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e8f5e9',
+    padding: 12,
+    borderRadius: BorderRadius.lg,
+    marginBottom: 16,
+  },
+  alertTextSuccess: {
+    color: '#2e7d32',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginBottom: 6,
+    letterSpacing: 1,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+    paddingHorizontal: 12,
+  },
+  inputDisabled: {
+    backgroundColor: Colors.surfaceContainerLow,
+    opacity: 0.7,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  formInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: Colors.onSurface,
+  },
+  editButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.surfaceContainerLow,
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  saveBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -814,8 +982,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  modalOptionTitle: { fontSize: 15, fontWeight: '700', color: Colors.onSurface, marginBottom: 2 },
-  modalOptionDesc: { fontSize: 12, color: Colors.onSurfaceVariant, lineHeight: 16 },
+  modalOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginBottom: 2,
+  },
+  modalOptionDesc: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16,
+  },
   modalCloseButton: {
     marginTop: 20,
     paddingVertical: 14,
@@ -823,137 +1000,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     alignItems: 'center',
   },
-  modalCloseButtonText: { fontSize: 16, fontWeight: '600', color: Colors.onSurfaceVariant },
-
-  // ESTILOS DE MODAL DE EDICIÓN DE PERFIL (T11)
-  editModalContent: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xxxl,
-    borderTopRightRadius: BorderRadius.xxxl,
-    padding: 24,
-    paddingBottom: 36,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  editModalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  editIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCloseIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalSubtitle: {
-    fontSize: 13,
+  modalCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.onSurfaceVariant,
-    marginBottom: 18,
-  },
-  alertBoxError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.md,
-    padding: 10,
-    marginBottom: 14,
-  },
-  alertTextError: { color: Colors.error, fontSize: 12, fontWeight: '600', flex: 1 },
-  alertBoxSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.tertiaryContainer,
-    borderRadius: BorderRadius.md,
-    padding: 10,
-    marginBottom: 14,
-  },
-  alertTextSuccess: { color: Colors.onTertiaryContainer, fontSize: 12, fontWeight: '600', flex: 1 },
-  formGroup: { marginBottom: 14 },
-  fieldLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-    letterSpacing: 1,
-    marginBottom: 6,
-    marginLeft: 2,
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  inputDisabled: {
-    backgroundColor: '#F3F3F3',
-    borderColor: '#E0E0E0',
-  },
-  inputIcon: { marginRight: 8 },
-  formInput: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.onBackground,
-    fontWeight: '500',
-  },
-  editButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 18,
-  },
-  cancelBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surfaceContainerLow,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-  },
-  saveBtn: {
-    flex: 1.5,
-    height: 48,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    elevation: 2,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
   },
 });
 
 const menuStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.surface },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -971,7 +1029,11 @@ const menuStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: Colors.onSurface },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
   card: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceContainerLowest,
@@ -979,22 +1041,116 @@ const menuStyles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
   },
-  cardImage: { width: 110, height: 110 },
-  cardContent: { flex: 1, padding: 14, justifyContent: 'space-between' },
-  cardName: { fontSize: 15, fontWeight: '700', color: Colors.onSurface },
-  cardDesc: { fontSize: 12, color: Colors.onSurfaceVariant, lineHeight: 16, marginTop: 4 },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  cardPrice: { fontSize: 18, fontWeight: '800', color: Colors.primaryContainer },
-  cardBadge: { backgroundColor: Colors.surfaceContainerLow, paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
-  cardBadgeText: { fontSize: 10, fontWeight: '600', color: Colors.onSurfaceVariant },
-  popupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 30 },
-  popup: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 24, width: '100%', maxWidth: 360, position: 'relative' },
-  popupClose: { position: 'absolute', top: 12, right: 12, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
-  popupImage: { width: '100%', height: 180, borderRadius: BorderRadius.xl, marginBottom: 16 },
-  popupName: { fontSize: 20, fontWeight: '800', color: Colors.onSurface, marginBottom: 8 },
-  popupDesc: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 16 },
-  popupPrice: { fontSize: 28, fontWeight: '800', color: Colors.primaryContainer, marginBottom: 20 },
-  popupAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primaryContainer, paddingVertical: 14, borderRadius: BorderRadius.xl },
-  popupAddText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimaryContainer },
+  cardImage: {
+    width: 110,
+    height: 110,
+  },
+  cardContent: {
+    flex: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  cardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  cardPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.primaryContainer,
+  },
+  cardBadge: {
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  cardBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
+  popup: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xxl,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    position: 'relative',
+  },
+  popupClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  popupImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: BorderRadius.xl,
+    marginBottom: 16,
+  },
+  popupName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    marginBottom: 8,
+  },
+  popupDesc: {
+    fontSize: 14,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  popupPrice: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.primaryContainer,
+    marginBottom: 20,
+  },
+  popupAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.primaryContainer,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.xl,
+  },
+  popupAddText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onPrimaryContainer,
+  },
 });

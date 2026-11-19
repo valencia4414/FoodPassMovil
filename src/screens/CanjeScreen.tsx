@@ -1,22 +1,209 @@
 // src/screens/CanjeScreen.tsx
-//
-// Pantalla de canje con código QR.
+// Pantalla de canje con generación manual de QR (vigencia diaria hasta medianoche)
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
+
+// Tipo de estado del QR
+type QRState = 'idle' | 'loading' | 'generated' | 'expired' | 'error' | 'ineligible' | 'used';
+
+interface QRData {
+  token: string;
+  expiresAt: string; // ISO string
+  code: string;      // código corto para mostrar
+}
 
 export default function CanjeScreen() {
   const [activeTab, setActiveTab] = useState<'qr' | 'codigo'>('qr');
+  const [qrState, setQrState] = useState<QRState>('idle');
+  const [qrData, setQrData] = useState<QRData | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const { userData } = useAuth();
+
+  // ── Generar QR manualmente ──────────────────────────────────────────────────
+  const handleGenerateQR = useCallback(async () => {
+    setQrState('loading');
+    setErrorMsg('');
+    try {
+      const response = await apiClient.post('/api/canje/generar-qr');
+      const data = response.data?.data || response.data;
+
+      if (data?.token) {
+        setQrData({
+          token: data.token,
+          expiresAt: data.expiresAt || data.expires_at || '',
+          code: data.code || data.codigoManual || `FP-${Math.floor(Math.random() * 9000) + 1000}`,
+        });
+        setQrState('generated');
+      } else {
+        setQrState('error');
+        setErrorMsg(response.data?.message || 'No se pudo generar el QR.');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Error de conexión';
+      if (err.response?.status === 403) {
+        setQrState('ineligible');
+        setErrorMsg(msg);
+      } else if (err.response?.status === 409) {
+        setQrState('used');
+        setErrorMsg(msg);
+      } else {
+        setQrState('error');
+        setErrorMsg(msg);
+      }
+    }
+  }, []);
+
+  // ── Expiración formateada ───────────────────────────────────────────────────
+  const getExpiresLabel = () => {
+    if (!qrData?.expiresAt) {
+      // Si no hay fecha del backend, mostrar medianoche de hoy
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(23, 59, 59, 0);
+      return `Válido hasta las 11:59 p. m. de hoy`;
+    }
+    try {
+      const d = new Date(qrData.expiresAt);
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      return `Válido hasta las ${h}:${m}`;
+    } catch {
+      return 'Válido hasta medianoche';
+    }
+  };
+
+  // ── Render QR Section ───────────────────────────────────────────────────────
+  const renderQRSection = () => {
+    switch (qrState) {
+      case 'idle':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <MaterialIcons name="qr-code-2" size={100} color={Colors.outlineVariant} />
+              <Text style={styles.qrIdleTitle}>Sin código generado</Text>
+              <Text style={styles.qrIdleSubtitle}>
+                Presiona el botón para generar tu código QR de hoy
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.generateBtn} onPress={handleGenerateQR} activeOpacity={0.85}>
+              <MaterialIcons name="qr-code" size={22} color="#fff" />
+              <Text style={styles.generateBtnText}>GENERAR CÓDIGO QR</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      case 'loading':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.qrIdleTitle}>Generando tu QR...</Text>
+            </View>
+          </View>
+        );
+
+      case 'generated':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrPlaceholder}>
+              <View style={[styles.qrCorner, styles.qrCornerTL]} />
+              <View style={[styles.qrCorner, styles.qrCornerTR]} />
+              <View style={[styles.qrCorner, styles.qrCornerBL]} />
+              <View style={[styles.qrCorner, styles.qrCornerBR]} />
+              <MaterialIcons name="qr-code-2" size={160} color={Colors.onSurface} />
+              <View style={styles.qrCenterDot}>
+                <MaterialIcons name="restaurant-menu" size={24} color={Colors.primaryContainer} />
+              </View>
+            </View>
+
+            <Text style={styles.qrLabel}>{qrData?.code ?? 'FP-QR'}</Text>
+            <Text style={styles.qrSubtitle}>
+              Muestra este código al cajero para canjear tu almuerzo
+            </Text>
+
+            <View style={styles.timer}>
+              <MaterialIcons name="timer" size={14} color={Colors.tertiary} />
+              <Text style={styles.timerText}>{getExpiresLabel()}</Text>
+            </View>
+
+            <TouchableOpacity style={[styles.generateBtn, { marginTop: 16 }]} onPress={handleGenerateQR} activeOpacity={0.85}>
+              <MaterialIcons name="refresh" size={20} color="#fff" />
+              <Text style={styles.generateBtnText}>REGENERAR QR</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      case 'error':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <MaterialIcons name="wifi-off" size={80} color={Colors.error || '#B00020'} />
+              <Text style={styles.qrIdleTitle}>Error de conexión</Text>
+              <Text style={styles.qrIdleSubtitle}>{errorMsg}</Text>
+            </View>
+            <TouchableOpacity style={styles.generateBtn} onPress={handleGenerateQR} activeOpacity={0.85}>
+              <MaterialIcons name="refresh" size={22} color="#fff" />
+              <Text style={styles.generateBtnText}>REINTENTAR</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      case 'ineligible':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <MaterialIcons name="block" size={80} color={Colors.error || '#B00020'} />
+              <Text style={styles.qrIdleTitle}>No elegible</Text>
+              <Text style={styles.qrIdleSubtitle}>{errorMsg}</Text>
+            </View>
+          </View>
+        );
+
+      case 'used':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <MaterialIcons name="check-circle" size={80} color={Colors.tertiary} />
+              <Text style={styles.qrIdleTitle}>Canje ya realizado</Text>
+              <Text style={styles.qrIdleSubtitle}>Ya canjeaste tu almuerzo hoy. Vuelve mañana.</Text>
+            </View>
+          </View>
+        );
+
+      case 'expired':
+        return (
+          <View style={styles.qrSection}>
+            <View style={styles.qrIdleBox}>
+              <MaterialIcons name="schedule" size={80} color={Colors.onSurfaceVariant} />
+              <Text style={styles.qrIdleTitle}>QR vencido</Text>
+              <Text style={styles.qrIdleSubtitle}>El código expiró. Genera uno nuevo.</Text>
+            </View>
+            <TouchableOpacity style={styles.generateBtn} onPress={handleGenerateQR} activeOpacity={0.85}>
+              <MaterialIcons name="qr-code" size={22} color="#fff" />
+              <Text style={styles.generateBtnText}>GENERAR NUEVO QR</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -27,18 +214,6 @@ export default function CanjeScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* === ESTADÍSTICAS RÁPIDAS === */}
-        <View style={styles.statsRow}>
-          <View style={styles.statChip}>
-            <Text style={styles.statChipNumber}>14</Text>
-            <Text style={styles.statChipLabel}>CANJES RESTANTES</Text>
-          </View>
-          <View style={[styles.statChip, styles.statChipDark]}>
-            <Text style={[styles.statChipNumber, { color: Colors.primaryContainer }]}>1,240</Text>
-            <Text style={[styles.statChipLabel, { color: 'rgba(255,255,255,0.6)' }]}>PUNTOS PASS</Text>
-          </View>
-        </View>
-
         {/* === TARJETA PRINCIPAL DE CANJE === */}
         <View style={styles.qrCard}>
           {/* Tabs QR / Código manual */}
@@ -72,47 +247,22 @@ export default function CanjeScreen() {
           </View>
 
           {activeTab === 'qr' ? (
-            /* === VISTA QR === */
-            <View style={styles.qrSection}>
-              {/* Placeholder del QR Code
-                  En producción usarías la librería: react-native-qrcode-svg */}
-              <View style={styles.qrPlaceholder}>
-                {/* Esquinas del QR (decorativas) */}
-                <View style={[styles.qrCorner, styles.qrCornerTL]} />
-                <View style={[styles.qrCorner, styles.qrCornerTR]} />
-                <View style={[styles.qrCorner, styles.qrCornerBL]} />
-                <View style={[styles.qrCorner, styles.qrCornerBR]} />
-
-                <MaterialIcons name="qr-code-2" size={160} color={Colors.onSurface} />
-                <View style={styles.qrCenterDot}>
-                  <MaterialIcons name="restaurant-menu" size={24} color={Colors.primaryContainer} />
-                </View>
-              </View>
-
-              <Text style={styles.qrLabel}>FP-2024-001-MS</Text>
-              <Text style={styles.qrSubtitle}>
-                Muestra este código al cajero para canjear tu almuerzo
-              </Text>
-
-              {/* Countdown timer simulado */}
-              <View style={styles.timer}>
-                <MaterialIcons name="timer" size={14} color={Colors.tertiary} />
-                <Text style={styles.timerText}>Válido por 04:32</Text>
-              </View>
-            </View>
+            renderQRSection()
           ) : (
-            /* === VISTA CÓDIGO MANUAL === */
+            /* === VISTA CÓDIGO MANUAL — SIN MODIFICAR FORMATO === */
             <View style={styles.codeSection}>
               <Text style={styles.codeTitle}>Tu código de hoy</Text>
               <View style={styles.codeDisplay}>
-                {['F', 'P', '-', '7', '8', '3', '4'].map((char, i) => (
+                {(qrData?.code || 'FP-7834').split('').map((char, i) => (
                   <View key={i} style={styles.codeChar}>
                     <Text style={styles.codeCharText}>{char}</Text>
                   </View>
                 ))}
               </View>
               <Text style={styles.codeSubtitle}>
-                Dicta este código en caja si el QR no funciona
+                {qrData?.code
+                  ? 'Dicta este código en caja si el lector QR no funciona'
+                  : 'Presiona "Código QR" y genera tu código de hoy'}
               </Text>
             </View>
           )}
@@ -126,7 +276,7 @@ export default function CanjeScreen() {
             </View>
             <View style={styles.planInfoText}>
               <Text style={styles.planInfoLabel}>CICLO ACTUAL</Text>
-              <Text style={styles.planInfoValue}>Mayo 2024 — 22 días laborables</Text>
+              <Text style={styles.planInfoValue}>Noviembre 2026 — días hábiles</Text>
             </View>
           </View>
 
@@ -146,31 +296,13 @@ export default function CanjeScreen() {
 
           <View style={styles.planInfoRow}>
             <View style={styles.planInfoIcon}>
-              <MaterialIcons name="place" size={18} color={Colors.primary} />
+              <MaterialIcons name="info-outline" size={18} color={Colors.primary} />
             </View>
             <View style={styles.planInfoText}>
-              <Text style={styles.planInfoLabel}>SEDES DISPONIBLES</Text>
-              <Text style={styles.planInfoValue}>Centro, Norte, Sur y Cafetería</Text>
+              <Text style={styles.planInfoLabel}>VIGENCIA DEL QR</Text>
+              <Text style={styles.planInfoValue}>El QR vence a medianoche (hora Colombia)</Text>
             </View>
           </View>
-        </View>
-
-        {/* === HISTORIAL RÁPIDO === */}
-        <View style={styles.recentSection}>
-          <Text style={styles.recentTitle}>Últimos canjes</Text>
-          {[
-            { name: 'Artisan Salad Bowl', date: 'Hoy', sede: 'Sede Centro' },
-            { name: 'FoodPass Signature', date: 'Ayer', sede: 'Sede Norte' },
-            { name: 'Kyoto Ramen Bowl', date: 'Mar 20', sede: 'Sede Centro' },
-          ].map((item, i) => (
-            <View key={i} style={styles.recentItem}>
-              <View style={styles.recentDot} />
-              <View style={styles.recentInfo}>
-                <Text style={styles.recentName}>{item.name}</Text>
-                <Text style={styles.recentMeta}>{item.date} · {item.sede}</Text>
-              </View>
-            </View>
-          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -187,34 +319,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statChip: {
-    flex: 1,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.xxl,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statChipDark: {
-    backgroundColor: Colors.inverseSurface,
-  },
-  statChipNumber: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.onBackground,
-    letterSpacing: -0.5,
-  },
-  statChipLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-    letterSpacing: 1.2,
-    marginTop: 2,
   },
   // TARJETA QR
   qrCard: {
@@ -264,6 +368,47 @@ const styles = StyleSheet.create({
   // QR VIEW
   qrSection: {
     alignItems: 'center',
+  },
+  qrIdleBox: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  qrIdleTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  qrIdleSubtitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  generateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.xl,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    marginTop: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  generateBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 1,
   },
   qrPlaceholder: {
     width: 220,
@@ -325,7 +470,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.tertiary,
   },
-  // CÓDIGO MANUAL
+  // CÓDIGO MANUAL (sin modificar)
   codeSection: {
     alignItems: 'center',
     paddingVertical: 12,
@@ -397,39 +542,8 @@ const styles = StyleSheet.create({
   planInfoDivider: {
     height: 16,
   },
-  // HISTORIAL RÁPIDO
-  recentSection: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.xxl,
-    padding: 20,
-  },
-  recentTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.onSurface,
-    marginBottom: 14,
-  },
-  recentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  recentDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primaryContainer,
-  },
-  recentInfo: { flex: 1 },
-  recentName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.onSurface,
-    marginBottom: 2,
-  },
-  recentMeta: {
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
+  // Colores de error (fallback si no existe en Colors)
+  error: {
+    color: '#B00020',
   },
 });
