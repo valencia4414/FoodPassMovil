@@ -49,12 +49,12 @@ type SettingItem = {
 
 // Datos del menú digital para modal de preferencias
 const menuPrefsItems = [
-  { id: '1', name: 'Artisan Salad Bowl', description: 'Mezcla orgánica de hojas verdes con salmón ahumado.', price: '$18.25', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
-  { id: '2', name: 'FoodPass Signature', description: 'Hamburguesa de res premium con queso artesanal.', price: '$14.50', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
-  { id: '3', name: 'Pasta del Huerto', description: 'Pasta hecha a mano con tomates cherry orgánicos.', price: '$16.00', image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400', category: 'Plato Fuerte' },
-  { id: '4', name: 'Morning Delight', description: 'Tostada de masa madre con aguacate y huevo pochado.', price: '$12.75', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400', category: 'Entradas' },
-  { id: '5', name: 'Kyoto Ramen Bowl', description: 'Caldo tonkotsu cocido por 12 horas.', price: '$21.50', image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400', category: 'Plato Fuerte' },
-  { id: '6', name: 'Tiramisú Artesanal', description: 'Postre italiano tradicional con café espresso.', price: '$9.50', image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Postres' },
+  { id: '1', name: 'Arroz con pollo', description: 'Delicioso arroz con pollo', price: '$8500', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
+  { id: '2', name: 'Carne de cerdo', description: 'Carne de cerdo a la parrilla', price: '$9000', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
+  { id: '3', name: 'Pollo Guisado', description: 'Presa de pollo en salsa de tomate', price: '$8000', image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400', category: 'Plato Fuerte' },
+  { id: '4', name: 'Carne de res', description: 'Bistec a la parrilla', price: '$12000', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400', category: 'Entradas' },
+  { id: '5', name: 'Pure de papas', description: 'Pure de papas con mantequilla y especias', price: '$3000', image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400', category: 'Plato Fuerte' },
+  { id: '6', name: 'Frijoles', description: 'Frijoles refritos con cebolla y cilantro', price: '$2500', image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Postres' },
 ];
 type MenuPrefItem = typeof menuPrefsItems[0];
 
@@ -130,12 +130,19 @@ export default function PerfilScreen() {
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
   // Variables calculadas de visualización
-  const userName: string = profileData?.name || userData?.name || 'Carlos Mendoza';
-  const userEmail: string = profileData?.email || userData?.email || 'carlos@foodpass.com';
+  const userName: string = profileData?.name || userData?.name || 'Beneficiario';
+  const userEmail: string = profileData?.email || userData?.email || 'beneficiario@sena.edu.co';
   const userPhone: string = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
-  const userPoints: number = Number(profileData?.puntos_fp ?? 1240) || 0;
+  const userFicha: string = profileData?.ficha || (userData as any)?.ficha || '';
+  const userDocumento: string = profileData?.documento || (userData as any)?.documento || '';
+  const userPoints: number = Number(profileData?.puntos_fp ?? userData?.puntos_fp ?? 0) || 0;
+  const isBeneficiario: boolean =
+    profileData?.role === 'beneficiario' ||
+    userData?.role === 'beneficiario' ||
+    profileData?.rol_id === 7 ||
+    (userData as any)?.rol_id === 7;
   const userMembership: string =
-    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'Premium';
+    profileData?.membresia || (userData as any)?.membresia || (userData as any)?.plan || 'SENA Beneficiario';
 
   const userInitials =
     userName
@@ -144,9 +151,11 @@ export default function PerfilScreen() {
       .map((w: string) => w[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase() || 'CM';
+      .toUpperCase() || 'FP';
 
-  const userPlanText = `${userMembership} Member`;
+  const userPlanText = isBeneficiario
+    ? (userFicha ? `Beneficiario · Ficha ${userFicha}` : 'Beneficiario SENA')
+    : `${userMembership} Member`;
 
   // Consultar datos reales del usuario desde el backend (GET /api/users/me)
   const fetchProfile = useCallback(async (refresh = false) => {
@@ -331,19 +340,19 @@ export default function PerfilScreen() {
           <View style={styles.profileStats}>
             <View style={styles.profileStat}>
               <Text style={styles.profileStatNumber}>
-                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : 12}
+                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : (profileData?.total_pedidos ?? 0)}
               </Text>
               <Text style={styles.profileStatLabel}>PEDIDOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString()}</Text>
+              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString('es-CO')}</Text>
               <Text style={styles.profileStatLabel}>PUNTOS</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={[styles.profileStatNumber, { color: Colors.tertiary }]}>$1,450</Text>
-              <Text style={styles.profileStatLabel}>AHORRADO</Text>
+              <Text style={[styles.profileStatNumber, { color: Colors.tertiary }]}>{userFicha || 'SENA'}</Text>
+              <Text style={styles.profileStatLabel}>FICHA</Text>
             </View>
           </View>
         </View>
@@ -505,6 +514,36 @@ export default function PerfilScreen() {
                   placeholderTextColor="#999"
                   keyboardType="phone-pad"
                   editable={!isSaving}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.inputLabel}>NÚMERO DE FICHA (PROTEGIDO)</Text>
+                <MaterialIcons name="lock" size={12} color="#888" />
+              </View>
+              <View style={[styles.inputWrap, styles.inputDisabled]}>
+                <MaterialIcons name="confirmation-number" size={20} color="#888" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.formInput, { color: '#888' }]}
+                  value={userFicha || 'No registrada'}
+                  editable={false}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.inputLabel}>DOCUMENTO DE IDENTIDAD (PROTEGIDO)</Text>
+                <MaterialIcons name="lock" size={12} color="#888" />
+              </View>
+              <View style={[styles.inputWrap, styles.inputDisabled]}>
+                <MaterialIcons name="badge" size={20} color="#888" style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.formInput, { color: '#888' }]}
+                  value={userDocumento || 'No registrado'}
+                  editable={false}
                 />
               </View>
             </View>

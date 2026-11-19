@@ -8,15 +8,16 @@ import { COLORS } from '../styles/colors';
 import PointsCard from '../components/PointsCard';
 import RewardItem from '../components/RewardItem';
 import { rewardsData } from '../data/rewards';
+import { useAuth } from '../context/AuthContext';
 
 const PointsScreen = () => {
   const navigation = useNavigation<any>();
-  // Simulamos los puntos del usuario. Más tarde esto vendrá de una base de datos.
-  const userPoints = 1250;
+  const { userData } = useAuth();
+  const userPoints = Number(userData?.puntos_fp ?? 1250);
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.dark} />
+      <StatusBar barStyle="light-content" />
       
       {/* Encabezado superior */}
       <View style={styles.header}>

@@ -249,18 +249,20 @@ export default function CanjeScreen() {
           {activeTab === 'qr' ? (
             renderQRSection()
           ) : (
-            /* === VISTA CÓDIGO MANUAL — SIN MODIFICAR === */
+            /* === VISTA CÓDIGO MANUAL — SIN MODIFICAR FORMATO === */
             <View style={styles.codeSection}>
               <Text style={styles.codeTitle}>Tu código de hoy</Text>
               <View style={styles.codeDisplay}>
-                {['F', 'P', '-', '7', '8', '3', '4'].map((char, i) => (
+                {(qrData?.code || 'FP-7834').split('').map((char, i) => (
                   <View key={i} style={styles.codeChar}>
                     <Text style={styles.codeCharText}>{char}</Text>
                   </View>
                 ))}
               </View>
               <Text style={styles.codeSubtitle}>
-                Dicta este código en caja si el QR no funciona
+                {qrData?.code
+                  ? 'Dicta este código en caja si el lector QR no funciona'
+                  : 'Presiona "Código QR" y genera tu código de hoy'}
               </Text>
             </View>
           )}

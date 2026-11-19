@@ -43,6 +43,7 @@ export default function Header({
   const [cartVisible, setCartVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const debounceTimer = useRef<any>(null);
 
   // Conserva aquí el resto de tu código original.
 
