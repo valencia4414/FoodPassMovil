@@ -22,8 +22,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius } from '../theme/colors';
 import apiClient from '../services/apiClient';
+import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen({ navigation }: any) {
+  const { login } = useAuth();
   const [name, setName] = useState('');
   const [documento, setDocumento] = useState(''); // <--- Nuevo estado para la cédula
   const [email, setEmail] = useState('');
@@ -36,13 +38,64 @@ export default function RegisterScreen({ navigation }: any) {
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  // Función de registro (T04: Conexión con POST /api/auth/register)
+  // Función de registro con validaciones completas (RFM02)
   const handleRegister = async () => {
-    if (!name.trim() || !documento.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Campos incompletos', 'Por favor completa todos los campos, incluyendo tu documento.');
+    const cleanName = name.trim();
+    const cleanDoc = documento.trim();
+    const cleanEmail = email.trim();
+    const cleanPassword = password;
+
+    // 1. Validación de campos obligatorios
+    if (!cleanName || !cleanDoc || !cleanEmail || !cleanPassword) {
+      Alert.alert('Campos incompletos', 'Por favor completa todos los campos del formulario.');
       return;
     }
 
+    // 2. Validación de nombre real del usuario (mínimo 3 caracteres, solo letras y espacios)
+    const nameRegex = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]{3,60}$/;
+    if (!nameRegex.test(cleanName)) {
+      Alert.alert(
+        'Nombre inválido',
+        'Por favor ingresa un nombre real válido (mínimo 3 caracteres, solo letras y espacios).'
+      );
+      return;
+    }
+
+    // 3. Validación de cédula de ciudadanía (mínimo 10 caracteres numéricos)
+    const docRegex = /^\d{10,}$/;
+    if (!docRegex.test(cleanDoc)) {
+      Alert.alert(
+        'Cédula inválida',
+        'La cédula de ciudadanía debe contener únicamente números y tener un mínimo de 10 dígitos.'
+      );
+      return;
+    }
+
+    // 4. Validación de correo electrónico (formato válido con @ y .com, .net, etc.)
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(cleanEmail)) {
+      Alert.alert(
+        'Correo inválido',
+        'Por favor ingresa un correo electrónico con formato válido (ejemplo: usuario@correo.com).'
+      );
+      return;
+    }
+
+    // 5. Validación de contraseña (mínimo 8 caracteres alfanuméricos con al menos una mayúscula)
+    const hasMinLength = cleanPassword.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(cleanPassword);
+    const hasNumber = /\d/.test(cleanPassword);
+    const hasLetter = /[a-zA-Z]/.test(cleanPassword);
+
+    if (!hasMinLength || !hasUpperCase || !hasNumber || !hasLetter) {
+      Alert.alert(
+        'Contraseña no cumple requisitos',
+        'La contraseña debe tener mínimo 8 caracteres, incluir números y letras, y al menos una letra mayúscula (ej: Foodpass1).'
+      );
+      return;
+    }
+
+    // 6. Validación de aceptación de términos y políticas
     if (!acceptPolicy) {
       Alert.alert(
         'Cumplimiento legal',
@@ -53,27 +106,46 @@ export default function RegisterScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      // Petición POST al endpoint de registro del backend enviando el documento
-      await apiClient.post('/api/auth/register', {
-        name: name.trim(),
-        documento: documento.trim(), // <--- Enviando la cédula al backend
-        email: email.trim(),
-        password: password,
+      // Petición POST al endpoint de registro del backend enviando los datos validados
+      const response = await apiClient.post('/api/auth/register', {
+        name: cleanName,
+        documento: cleanDoc,
+        email: cleanEmail.toLowerCase(),
+        password: cleanPassword,
       });
 
-      Alert.alert(
-        '¡Registro exitoso!',
-        'Tu cuenta ha sido creada correctamente. Ahora puedes iniciar sesión.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      const resData = response.data?.data || response.data;
+      const token = resData?.token;
+      const user = resData?.user || { id: '1', name: cleanName, email: cleanEmail, role: 'cliente' };
+
+      if (token && login) {
+        await login(token, user);
+      } else {
+        Alert.alert('¡Registro exitoso!', 'Tu cuenta ha sido creada correctamente.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (error: any) {
       console.error('[RegisterScreen] Error durante el registro:', error);
       
-      const errorMessage =
-        error.response?.data?.message ||
-        'Ocurrió un error al registrar el usuario (documento/correo duplicado o fallo en el servidor).';
+      const serverMessage = error.response?.data?.message;
+      let finalMessage = serverMessage;
+
+      if (!finalMessage) {
+        const calledUrl = error.config
+          ? `${error.config.baseURL || ''}${error.config.url || ''}`
+          : '';
+
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          finalMessage = `Tiempo de espera agotado al conectar con el servidor:\n${calledUrl}\n\nVerifica que la API esté encendida en el puerto 3000.`;
+        } else if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+          finalMessage = `No se pudo conectar con el servidor:\n${calledUrl}\n\nVerifica que la API esté corriendo en el puerto 3000 y tu celular esté conectado a la misma red Wi-Fi.`;
+        } else {
+          finalMessage = error.message || 'Ocurrió un error al registrar el usuario.';
+        }
+      }
       
-      Alert.alert('Error de registro', errorMessage);
+      Alert.alert('Error de registro', finalMessage);
     } finally {
       setIsLoading(false);
     }

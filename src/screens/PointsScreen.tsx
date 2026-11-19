@@ -1,13 +1,16 @@
 // src/screens/PointsScreen.tsx
 
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, FlatList, StyleSheet, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
 import { COLORS } from '../styles/colors';
 import PointsCard from '../components/PointsCard';
 import RewardItem from '../components/RewardItem';
 import { rewardsData } from '../data/rewards';
 
 const PointsScreen = () => {
+  const navigation = useNavigation<any>();
   // Simulamos los puntos del usuario. Más tarde esto vendrá de una base de datos.
   const userPoints = 1250;
 
@@ -17,6 +20,9 @@ const PointsScreen = () => {
       
       {/* Encabezado superior */}
       <View style={styles.header}>
+        <TouchableOpacity style={{ marginRight: 12 }} onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Mis Puntos</Text>
       </View>
 
@@ -47,6 +53,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dark,
     paddingVertical: 20,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },

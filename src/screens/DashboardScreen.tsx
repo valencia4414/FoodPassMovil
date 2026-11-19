@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -25,6 +26,7 @@ const recentTransactions = [
 ];
 
 export default function DashboardScreen() {
+  const navigation = useNavigation<any>();
   // --- NUEVOS ESTADOS PARA BÚSQUEDA ---
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -127,7 +129,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Últimos Canjes</Text>
-            <TouchableOpacity><Text style={styles.sectionLink}>Ver todo</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Historial')}><Text style={styles.sectionLink}>Ver todo</Text></TouchableOpacity>
           </View>
 
           {/* LISTA FILTRADA POR EL BUSCADOR */}
@@ -150,7 +152,7 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.pointsBanner} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.pointsBanner} activeOpacity={0.9} onPress={() => navigation.navigate('PointsRewards')}>
           <View style={styles.pointsBannerContent}>
             <MaterialIcons name="workspace-premium" size={32} color={Colors.primaryContainer} />
             <View style={styles.pointsBannerText}>

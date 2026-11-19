@@ -1,6 +1,6 @@
 // src/components/shared/Header.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,7 +75,11 @@ export default function Header({
 
   const handleTextChange = (text: string) => {
     setSearchText(text);
-    onSearchTextChange?.(text);
+    // Debounce: notify parent only after 300 ms of inactivity
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      onSearchTextChange?.(text);
+    }, 300);
   };
 
   return (
