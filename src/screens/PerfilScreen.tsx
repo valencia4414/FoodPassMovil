@@ -58,19 +58,10 @@ const menuPrefsItems = [
 ];
 type MenuPrefItem = typeof menuPrefsItems[0];
 
-const pointsRewards = [
-  { id: '10_discount', title: '10% de descuento', desc: 'Ahorra en tu próxima compra. ¡Válido para cualquier producto!' },
-  { id: 'free_coffee', title: 'Café gratis', desc: 'Disfruta de un delicioso café americano en nuestra tienda.' },
-  { id: '30_discount', title: '30% de descuento', desc: 'Un descuento especial para que te lleves más por menos.' },
-  { id: 'free_lunch', title: 'Almuerzo gratis', desc: 'Un almuerzo completo por cortesía de la casa. ¡Date un gusto!' },
-];
-
 export default function PerfilScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [chatVisible, setChatVisible] = useState(false);
   const [favModalVisible, setFavModalVisible] = useState(false);
-  const [pointsModalVisible, setPointsModalVisible] = useState(false);
-  const [selectedReward, setSelectedReward] = useState<string | null>(null);
   const [menuPrefsVisible, setMenuPrefsVisible] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuPrefItem | null>(null);
 
@@ -135,7 +126,6 @@ export default function PerfilScreen() {
   const userPhone: string = profileData?.telefono || (userData as any)?.telefono || 'No registrado';
   const userFicha: string = profileData?.ficha || (userData as any)?.ficha || '';
   const userDocumento: string = profileData?.documento || (userData as any)?.documento || '';
-  const userPoints: number = Number(profileData?.puntos_fp ?? userData?.puntos_fp ?? 0) || 0;
   const isBeneficiario: boolean =
     profileData?.role === 'beneficiario' ||
     userData?.role === 'beneficiario' ||
@@ -174,7 +164,6 @@ export default function PerfilScreen() {
             role: u.role,
             telefono: u.telefono,
             membresia: u.membresia,
-            puntos_fp: u.puntos_fp,
           } as any);
         }
       }
@@ -275,14 +264,6 @@ export default function PerfilScreen() {
       ],
     },
     {
-      title: 'FoodPass',
-      items: [
-        { icon: 'restaurant-menu', label: 'Preferencias de menú', type: 'arrow' },
-        { icon: 'place', label: 'Mis sedes favoritas', type: 'arrow' },
-        { icon: 'card-giftcard', label: 'Programa de puntos', type: 'badge', badge: `${userPoints} pts`, badgeColor: Colors.tertiaryContainer },
-      ],
-    },
-    {
       title: 'Soporte',
       items: [
         { icon: 'help-outline', label: 'Centro de ayuda', type: 'arrow' },
@@ -346,8 +327,8 @@ export default function PerfilScreen() {
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>{userPoints.toLocaleString('es-CO')}</Text>
-              <Text style={styles.profileStatLabel}>PUNTOS</Text>
+              <Text style={[styles.profileStatNumber, { color: Colors.primaryContainer }]}>Activo</Text>
+              <Text style={styles.profileStatLabel}>ESTADO</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
@@ -394,8 +375,6 @@ export default function PerfilScreen() {
                         setFavModalVisible(true);
                       } else if (item.label === 'Seguridad') {
                         navigation.navigate('Security');
-                      } else if (item.label === 'Programa de puntos') {
-                        setPointsModalVisible(true);
                       } else if (item.label === 'Información personal') {
                         handleOpenEditModal();
                       } else if (item.label === 'Contactar soporte') {
@@ -599,46 +578,6 @@ export default function PerfilScreen() {
 
       {/* MODAL DE SEDES FAVORITAS */}
       <FavoriteLocationsModal visible={favModalVisible} onClose={() => setFavModalVisible(false)} />
-
-      {/* MODAL PROGRAMA DE PUNTOS */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={pointsModalVisible}
-        onRequestClose={() => setPointsModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Canjea tus puntos</Text>
-
-            {pointsRewards.map((reward) => (
-              <TouchableOpacity
-                key={reward.id}
-                style={styles.modalOption}
-                onPress={() => setSelectedReward(reward.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.modalOptionIcon}>
-                  <MaterialIcons name="card-giftcard" size={24} color={Colors.tertiary} />
-                </View>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={styles.modalOptionTitle}>{reward.title}</Text>
-                  <Text style={styles.modalOptionDesc}>{reward.desc}</Text>
-                </View>
-                <MaterialIcons
-                  name={selectedReward === reward.id ? 'check-box' : 'check-box-outline-blank'}
-                  size={24}
-                  color={selectedReward === reward.id ? Colors.primary : Colors.outlineVariant}
-                />
-              </TouchableOpacity>
-            ))}
-
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPointsModalVisible(false)}>
-              <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* MODAL PREFERENCIAS DE MENÚ */}
       <Modal

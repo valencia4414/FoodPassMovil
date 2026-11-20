@@ -35,12 +35,10 @@ interface DashboardSummary {
     id: number;
     name: string;
     firstName: string;
-    puntos_fp: number;
     membresia: string;
     ficha: string;
     es_beneficiario: boolean;
   };
-  puntos_fp: number;
   total_pedidos: number;
   almuerzos_disponibles: number;
   almuerzos_total_mes: number;
@@ -84,7 +82,6 @@ export default function DashboardScreen() {
   // Variables calculadas dinámicas
   const rawName = userData?.name || summary?.user?.name || 'Beneficiario';
   const firstName = rawName.split(' ')[0] || 'Beneficiario';
-  const userPoints = userData?.puntos_fp ?? summary?.puntos_fp ?? 0;
   const totalPedidos = summary?.total_pedidos ?? 0;
   const almuerzosDisp = summary?.almuerzos_disponibles ?? 22;
   const almuerzosTotal = summary?.almuerzos_total_mes ?? 22;
@@ -99,7 +96,12 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* SECCIÓN CABECERA INTERACTIVA */}
       <View style={styles.headerWrapper}>
-        <Header title="Panel Principal" showSearch />
+        <Header
+          title="Panel Principal"
+          showSearch
+          showCart={false}
+          onSearchPress={() => setIsSearching(true)}
+        />
 
         {/* BOTÓN INVISIBLE SOBRE LA LUPA */}
         {!isSearching && (
@@ -171,11 +173,6 @@ export default function DashboardScreen() {
           />
         </View>
 
-        {/* SEGUIMIENTO DE PEDIDO EN TIEMPO REAL (si hay pedido activo) */}
-        {activeOrderId && (
-          <PedidoStatusTracker initialOrderId={activeOrderId} />
-        )}
-
         <View style={styles.statsRow}>
           <View style={[styles.statCard, styles.statCardGreen]}>
             <View style={styles.statCardTop}>
@@ -196,14 +193,15 @@ export default function DashboardScreen() {
                   { backgroundColor: 'rgba(255,255,255,0.15)' },
                 ]}
               >
-                <MaterialIcons name="star" size={22} color={Colors.primaryContainer} />
+                <MaterialIcons name="verified" size={22} color={Colors.primaryContainer} />
               </View>
+              <Text style={[styles.statBadge, { color: Colors.primaryContainer }]}>Activo</Text>
             </View>
             <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.6)' }]}>
-              PUNTOS PASS
+              ESTADO PLAN
             </Text>
-            <Text style={[styles.statNumber, { color: Colors.primaryContainer }]}>
-              {userPoints.toLocaleString('es-CO')}
+            <Text style={[styles.statNumber, { color: Colors.primaryContainer, fontSize: 18 }]} numberOfLines={1}>
+              {userData?.membresia || userData?.plan || 'Beneficiario'}
             </Text>
           </View>
         </View>
@@ -244,33 +242,6 @@ export default function DashboardScreen() {
             </View>
           )}
         </View>
-
-        <TouchableOpacity
-          style={styles.pointsBanner}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('PointsRewards')}
-        >
-          <View style={styles.pointsBannerContent}>
-            <MaterialIcons
-              name="workspace-premium"
-              size={32}
-              color={Colors.primaryContainer}
-            />
-            <View style={styles.pointsBannerText}>
-              <Text style={styles.pointsBannerTitle}>
-                ¡Tienes {userPoints.toLocaleString('es-CO')} puntos!
-              </Text>
-              <Text style={styles.pointsBannerSubtitle}>
-                Canjéalos por recompensas y beneficios
-              </Text>
-            </View>
-          </View>
-          <MaterialIcons
-            name="arrow-forward-ios"
-            size={16}
-            color="rgba(255,255,255,0.6)"
-          />
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -463,21 +434,4 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     textAlign: 'center',
   },
-  pointsBanner: {
-    backgroundColor: Colors.inverseSurface,
-    borderRadius: BorderRadius.xxl,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pointsBannerContent: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  pointsBannerText: { flex: 1 },
-  pointsBannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
-  },
-  pointsBannerSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
 });

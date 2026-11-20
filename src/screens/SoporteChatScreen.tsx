@@ -41,12 +41,10 @@ type OpcionRapida = {
 const RESPUESTAS_BOT: Record<string, string> = {
   default:
     'Gracias por tu mensaje. Un agente de soporte revisará tu caso en breve. ¿Hay algo más en lo que pueda ayudarte?',
-  puntos:
-    'Tus puntos se acreditan automáticamente después de cada compra validada. Si han pasado más de 24 horas y no ves el saldo, intenta cerrar sesión y volver a entrar.',
   reembolso:
     'Para procesar un reembolso necesitamos: número de pedido, fecha de compra y motivo. Los reembolsos se procesan en 3 a 5 días hábiles a tu método de pago original.',
   plan:
-    'Tu plan Premium te da acceso ilimitado al menú, acumulación doble de puntos y descuentos exclusivos en sedes participantes.',
+    'Tu plan te da acceso al menú diario y beneficios exclusivos en sedes participantes.',
   contrasena:
     'Para restablecer tu contraseña ve a Inicio de sesión → "¿Olvidaste tu contraseña?" e ingresa tu correo. Recibirás un enlace en menos de 5 minutos.',
   pedido:
@@ -54,9 +52,8 @@ const RESPUESTAS_BOT: Record<string, string> = {
 };
 
 const OPCIONES_RAPIDAS: OpcionRapida[] = [
-  { id: 'puntos',     label: '🏆 Mis puntos no se acreditaron', respuesta: 'puntos' },
   { id: 'reembolso',  label: '💳 Solicitar reembolso',          respuesta: 'reembolso' },
-  { id: 'plan',       label: '⭐ Dudas sobre mi plan Premium',   respuesta: 'plan' },
+  { id: 'plan',       label: '⭐ Dudas sobre mi plan',           respuesta: 'plan' },
   { id: 'contrasena', label: '🔑 Problema con contraseña',       respuesta: 'contrasena' },
   { id: 'pedido',     label: '📦 Estado de mi pedido',           respuesta: 'pedido' },
 ];
@@ -69,7 +66,7 @@ const horaActual = () => {
 const SALUDO_INICIAL: Mensaje = {
   id: 'bot-0',
   texto:
-    '¡Hola! Soy el asistente virtual de FoodPass 🍽️\n\nEstoy aquí para ayudarte con cualquier duda sobre tu cuenta, pedidos, puntos o beneficios. Selecciona una opción rápida o escríbeme directamente.',
+    '¡Hola! Soy el asistente virtual de FoodPass 🍽️\n\nEstoy aquí para ayudarte con cualquier duda sobre tu cuenta, pedidos o beneficios. Selecciona una opción rápida o escríbeme directamente.',
   hora: horaActual(),
   esPropio: false,
 };

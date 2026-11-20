@@ -23,7 +23,6 @@ import PerfilScreen from '../screens/PerfilScreen';
 import SecurityScreen from '../screens/SecurityScreen';
 import HelpCenterScreen from '../screens/HelpCenterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import PointsScreen from '../screens/PointsScreen';
 import { Colors } from '../theme/colors';
 
 // Creamos los navegadores
@@ -108,8 +107,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Security" component={SecurityScreen} />
             <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
-            <Stack.Screen name="Points" component={PointsScreen} />
-            <Stack.Screen name="PointsRewards" component={PointsScreen} />
           </>
         ) : (
           <>
