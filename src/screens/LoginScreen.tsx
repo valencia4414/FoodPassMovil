@@ -235,19 +235,6 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
               </LinearGradient>
             </TouchableOpacity>
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>O CONTINÚA CON</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity style={styles.googleButton} activeOpacity={0.8}>
-              <View style={styles.googleIcon}>
-                <Text style={styles.googleIconText}>G</Text>
-              </View>
-              <Text style={styles.googleButtonText}>Google</Text>
-            </TouchableOpacity>
-
             {/* Footer con el botón de Crear Cuenta conectado */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>¿No tienes una cuenta? </Text>

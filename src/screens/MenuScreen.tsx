@@ -21,9 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import Header from '../components/shared/Header';
-import CartModal from '../components/shared/CartModal';
 import { Colors, BorderRadius } from '../theme/colors';
-import { useCart } from '../context/CartContext';
 import { apiClient } from '../services/apiClient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,9 +45,6 @@ type Categoria = {
 
 export default function MenuScreen() {
   const [activeCategory, setActiveCategory] = useState('Todos');
-  const { addItem, totalItems, getTotalPrice } = useCart();
-  const [cartModalOpen, setCartModalOpen] = useState(false);
-
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -172,23 +167,13 @@ export default function MenuScreen() {
           {item.description}
         </Text>
         <View style={styles.cardFooter}>
-          <Text style={styles.cardPrice}>{item.price}</Text>
-          <View style={styles.cardActionsRow}>
-            <TouchableOpacity
-              style={styles.selectButton}
-              activeOpacity={0.8}
-              onPress={() => setSelectedItem(item)}
-            >
-              <Text style={styles.selectButtonText}>Ver</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAddButton}
-              activeOpacity={0.8}
-              onPress={() => addItem(item as any)}
-            >
-              <MaterialIcons name="add-shopping-cart" size={18} color={Colors.onPrimaryContainer} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.selectButton}
+            activeOpacity={0.8}
+            onPress={() => setSelectedItem(item)}
+          >
+            <Text style={styles.selectButtonText}>Ver detalle</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -252,26 +237,6 @@ export default function MenuScreen() {
             <Text style={styles.featuredTitle}>
               Corte Artisan{'\n'}con Finas Hierbas
             </Text>
-            <View style={styles.featuredFooter}>
-              <TouchableOpacity
-                style={styles.featuredButton}
-                activeOpacity={0.8}
-                onPress={() => {
-                  addItem({
-                    id: 'featured-chef-1',
-                    name: 'Corte Artisan con Finas Hierbas',
-                    description: 'Corte selecto cocido a fuego lento con finas hierbas aromáticas.',
-                    price: '$45.50',
-                    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400',
-                    category: 'Plato Fuerte',
-                  } as any);
-                }}
-              >
-                <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
-                <Text style={styles.featuredButtonText}>Pedir</Text>
-              </TouchableOpacity>
-              <Text style={styles.featuredPrice}>$45.50</Text>
-            </View>
           </View>
         </View>
 
@@ -318,10 +283,7 @@ export default function MenuScreen() {
             keyExtractor={(item, index) => String(item.id || index)}
             numColumns={2}
             columnWrapperStyle={styles.row}
-            contentContainerStyle={[
-              styles.listContent,
-              totalItems > 0 && { paddingBottom: 80 },
-            ]}
+            contentContainerStyle={styles.listContent}
             scrollEnabled={false}
             ListEmptyComponent={
               <Text style={styles.emptyText}>No se encontraron platos.</Text>
@@ -329,36 +291,6 @@ export default function MenuScreen() {
           />
         )}
       </ScrollView>
-
-      {totalItems > 0 && (
-        <View style={styles.floatingBarWrapper}>
-          <TouchableOpacity
-            style={styles.floatingBar}
-            activeOpacity={0.9}
-            onPress={() => setCartModalOpen(true)}
-          >
-            <View style={styles.floatingBarLeft}>
-              <View style={styles.floatingBadge}>
-                <MaterialIcons name="shopping-cart" size={16} color={Colors.onPrimaryContainer} />
-                <Text style={styles.floatingBadgeText}>{totalItems}</Text>
-              </View>
-              <View style={styles.floatingTexts}>
-                <Text style={styles.floatingItemsLabel}>
-                  {totalItems} {totalItems === 1 ? 'producto añadido' : 'productos añadidos'}
-                </Text>
-                <Text style={styles.floatingTotalPrice}>
-                  Total: ${getTotalPrice().toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.floatingBarRight}>
-              <Text style={styles.floatingCheckoutText}>Checkout</Text>
-              <MaterialIcons name="arrow-forward" size={16} color={Colors.onPrimaryContainer} />
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
 
       <Modal
         animationType="fade"
@@ -377,29 +309,18 @@ export default function MenuScreen() {
                 <Image source={{ uri: selectedItem.image }} style={popupStyles.image} resizeMode="cover" />
                 <Text style={popupStyles.name}>{selectedItem.name}</Text>
                 <Text style={popupStyles.description}>{selectedItem.description}</Text>
-                <View style={popupStyles.priceRow}>
-                  <Text style={popupStyles.price}>{selectedItem.price}</Text>
-                </View>
                 <TouchableOpacity
-                  style={popupStyles.addButton}
+                  style={popupStyles.closeBottomButton}
                   activeOpacity={0.8}
-                  onPress={() => {
-                    if (selectedItem) {
-                      addItem(selectedItem as any);
-                      setSelectedItem(null);
-                    }
-                  }}
+                  onPress={() => setSelectedItem(null)}
                 >
-                  <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
-                  <Text style={popupStyles.addButtonText}>Agregar al carrito</Text>
+                  <Text style={popupStyles.closeBottomText}>Cerrar</Text>
                 </TouchableOpacity>
               </>
             )}
           </Pressable>
         </Pressable>
       </Modal>
-
-      <CartModal visible={cartModalOpen} onClose={() => setCartModalOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -529,64 +450,14 @@ const styles = StyleSheet.create({
   cardContent: { padding: 14 },
   cardName: { fontSize: 14, fontWeight: '700', color: Colors.onSurface, marginBottom: 4 },
   cardDescription: { fontSize: 11, color: Colors.onSurfaceVariant, lineHeight: 15, marginBottom: 12 },
-  cardFooter: { gap: 8 },
-  cardPrice: { fontSize: 20, fontWeight: '800', color: Colors.primaryContainer },
-  cardActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardFooter: { marginTop: 4 },
   selectButton: {
-    flex: 1,
     backgroundColor: Colors.surfaceContainerLow,
     paddingVertical: 9,
     borderRadius: BorderRadius.lg,
     alignItems: 'center',
   },
   selectButtonText: { fontSize: 12, fontWeight: '700', color: Colors.onSurface },
-  quickAddButton: {
-    backgroundColor: Colors.primaryContainer,
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingBarWrapper: { position: 'absolute', bottom: 12, left: 16, right: 16, zIndex: 99 },
-  floatingBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.inverseSurface,
-    borderRadius: BorderRadius.xxl,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  floatingBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  floatingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  floatingBadgeText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
-  floatingTexts: { justifyContent: 'center' },
-  floatingItemsLabel: { fontSize: 11, color: 'rgba(255, 255, 255, 0.7)', fontWeight: '500' },
-  floatingTotalPrice: { fontSize: 15, fontWeight: '800', color: '#ffffff' },
-  floatingBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 4,
-  },
-  floatingCheckoutText: { fontSize: 12, fontWeight: '800', color: Colors.onPrimaryContainer },
   emptyText: { textAlign: 'center', marginTop: 20, color: Colors.onSurfaceVariant },
 });
 
@@ -620,17 +491,12 @@ const popupStyles = StyleSheet.create({
   },
   image: { width: '100%', height: 180, borderRadius: BorderRadius.xl, marginBottom: 16 },
   name: { fontSize: 20, fontWeight: '800', color: Colors.onSurface, marginBottom: 8 },
-  description: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 16 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  price: { fontSize: 28, fontWeight: '800', color: Colors.primaryContainer },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.primaryContainer,
-    paddingVertical: 14,
+  description: { fontSize: 14, color: Colors.onSurfaceVariant, lineHeight: 20, marginBottom: 20 },
+  closeBottomButton: {
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingVertical: 12,
     borderRadius: BorderRadius.xl,
+    alignItems: 'center',
   },
-  addButtonText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimaryContainer },
+  closeBottomText: { fontSize: 14, fontWeight: '700', color: Colors.onSurface },
 });

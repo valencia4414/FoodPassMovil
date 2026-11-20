@@ -29,7 +29,7 @@ interface HeaderProps {
 export default function Header({
   title,
   showSearch = false,
-  showCart = true,
+  showCart = false,
   onSearchPress,
   onSearchTextChange,
 }: HeaderProps) {
@@ -183,10 +183,12 @@ export default function Header({
       />
 
       {/* El Modal del Carrito de Compras */}
-      <CartModal
-        visible={cartVisible}
-        onClose={() => setCartVisible(false)}
-      />
+      {showCart && (
+        <CartModal
+          visible={cartVisible}
+          onClose={() => setCartVisible(false)}
+        />
+      )}
     </View>
   );
 }

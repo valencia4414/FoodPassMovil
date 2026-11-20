@@ -30,7 +30,6 @@ export interface UserData {
   avatar?: string;
   plan?: string;
   membresia?: string;
-  puntos_fp?: number;
 }
 
 // Tipo del contexto de autenticación (Una sola vez)

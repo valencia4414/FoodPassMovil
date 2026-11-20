@@ -149,8 +149,7 @@ export default function HistorialScreen() {
     const totalPedidos = pedidos.length;
     const totalGastado = pedidos.reduce((acc, p) => acc + (Number(p.total) || 0), 0);
     const totalAhorro = Math.round(totalGastado * 0.1);
-    const ordersLeft = Math.max(1, 5 - (totalPedidos % 5));
-    return { totalPedidos, totalAhorro, ordersLeft };
+    return { totalPedidos, totalAhorro };
   }, [pedidos]);
 
   // Renderizado individual de una orden
@@ -271,14 +270,6 @@ export default function HistorialScreen() {
               </View>
             </View>
           </View>
-
-          <View style={styles.eliteCard}>
-            <View style={styles.eliteIcon}>
-              <MaterialIcons name="workspace-premium" size={28} color={Colors.onPrimaryContainer} />
-            </View>
-            <Text style={styles.eliteTitle}>Elite</Text>
-            <Text style={styles.eliteSubtitle}>{stats.ordersLeft} para premio</Text>
-          </View>
         </View>
 
         <ScrollView
@@ -387,18 +378,14 @@ const styles = StyleSheet.create({
   fullSearchBar: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: 70, zIndex: 102, elevation: 4 },
   inputField: { flex: 1, marginLeft: 15, fontSize: 15, color: '#000', fontWeight: '500' },
   scroll: { flex: 1 },
-  statsContainer: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 20, marginBottom: 16 },
-  heroStatCard: { flex: 2, backgroundColor: '#FFF', borderRadius: BorderRadius.xxl, padding: 16, elevation: 3 },
+  statsContainer: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 20, marginBottom: 16 },
+  heroStatCard: { flex: 1, backgroundColor: '#FFF', borderRadius: BorderRadius.xxl, padding: 16, elevation: 3 },
   heroStatTitle: { fontSize: 14, fontWeight: '700', marginBottom: 10 },
   heroStats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroStatCol: { flex: 1 },
   heroStatLabel: { fontSize: 8, fontWeight: '700', color: '#888' },
   heroStatNumber: { fontSize: 24, fontWeight: '800' },
   heroStatDivider: { width: 1, height: 30, backgroundColor: '#EEE', marginHorizontal: 10 },
-  eliteCard: { flex: 0.8, backgroundColor: Colors.inverseSurface, borderRadius: BorderRadius.xxl, padding: 10, alignItems: 'center', justifyContent: 'center' },
-  eliteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
-  eliteTitle: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  eliteSubtitle: { fontSize: 9, color: 'rgba(255,255,255,0.6)', textAlign: 'center' },
   filtersScroll: { maxHeight: 48, marginBottom: 8 },
   filtersContainer: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: BorderRadius.xl, backgroundColor: '#F5F5F5' },
