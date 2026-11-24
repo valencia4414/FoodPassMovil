@@ -10,8 +10,9 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ImageSourcePropType,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   TextInput,
   Modal,
   Pressable,
@@ -19,13 +20,11 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
-import { apiClient } from '../services/apiClient';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 40 - 12) / 2;
+import { apiClient, API_BASE_URL } from '../services/apiClient';
 
 type MenuItem = {
   id: string | number;
@@ -34,16 +33,79 @@ type MenuItem = {
   price: string | number;
   badge?: string | null;
   badgeType?: string;
-  image: string;
+  image: string | ImageSourcePropType;
   category: string;
 };
 
-type Categoria = {
-  id: string | number;
-  nombre: string;
+const LOCAL_PLATILLO_IMAGES: Record<string, ImageSourcePropType> = {
+  'arroz-con-pollo.jpg': require('../../assets/platillos/arroz-con-pollo.jpg'),
+  'arvejas.jpg': require('../../assets/platillos/arvejas.jpg'),
+  'bowl-avena.jpg': require('../../assets/platillos/bowl-avena.jpg'),
+  'calentado-paisa.jpg': require('../../assets/platillos/calentado-paisa.jpg'),
+  'carne-cerdo.jpg': require('../../assets/platillos/carne-cerdo.jpg'),
+  'carne-res.jpg': require('../../assets/platillos/carne-res.jpg'),
+  'empanada-pollo.jpg': require('../../assets/platillos/empanada-pollo.jpg'),
+  'ensalada-fresca.jpg': require('../../assets/platillos/Ensalada-fresca.jpg'),
+  'frijoles.jpg': require('../../assets/platillos/frijoles.jpg'),
+  'huevos-rancheros.jpg': require('../../assets/platillos/huevos-rancheros.jpg'),
+  'lentejas.jpg': require('../../assets/platillos/lentejas.jpg'),
+  'parfait.jpg': require('../../assets/platillos/parfait.jpg'),
+  'pollo-guisado.jpg': require('../../assets/platillos/pollo-guisado.jpg'),
+  'pure-papa.jpg': require('../../assets/platillos/pure-papa.jpg'),
+  'sandwinch-jamon.jpg': require('../../assets/platillos/sandwinch-jamon.jpg'),
+  'verduras.jpg': require('../../assets/platillos/verduras.jpg'),
 };
 
+const LOCAL_IMAGE_KEYWORDS: Array<{ keywords: string[]; file: string }> = [
+  { keywords: ['arroz con pollo'], file: 'arroz-con-pollo.jpg' },
+  { keywords: ['arveja'], file: 'arvejas.jpg' },
+  { keywords: ['avena'], file: 'bowl-avena.jpg' },
+  { keywords: ['calentado'], file: 'calentado-paisa.jpg' },
+  { keywords: ['cerdo'], file: 'carne-cerdo.jpg' },
+  { keywords: ['carne de res', 'carne res'], file: 'carne-res.jpg' },
+  { keywords: ['empanada'], file: 'empanada-pollo.jpg' },
+  { keywords: ['ensalada'], file: 'ensalada-fresca.jpg' },
+  { keywords: ['frijol'], file: 'frijoles.jpg' },
+  { keywords: ['huevos rancheros', 'huevo ranchero'], file: 'huevos-rancheros.jpg' },
+  { keywords: ['lenteja'], file: 'lentejas.jpg' },
+  { keywords: ['parfait'], file: 'parfait.jpg' },
+  { keywords: ['pollo guisado'], file: 'pollo-guisado.jpg' },
+  { keywords: ['pure'], file: 'pure-papa.jpg' },
+  { keywords: ['sandwich', 'sandwinch'], file: 'sandwinch-jamon.jpg' },
+  { keywords: ['verdura'], file: 'verduras.jpg' },
+];
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const DEFAULT_CATEGORIES = [
+  'Todos',
+  'Desayuno',
+  'Almuerzo',
+  'Refrigerio',
+  'Bebidas Calientes',
+  'Postres',
+];
+
+function normalizeCategories(rawNames: string[]): string[] {
+  const expanded = rawNames.flatMap((name) =>
+    name.trim().toLowerCase() === 'almuerzo ejecutivo'
+      ? ['Desayuno', 'Almuerzo', 'Refrigerio']
+      : [name.trim()]
+  );
+  return ['Todos', ...Array.from(new Set(expanded.filter(Boolean)))];
+}
+
 export default function MenuScreen() {
+  const navigation = useNavigation<any>();
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = Math.max(140, Math.floor((windowWidth - 40 - 12) / 2));
+
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -64,38 +126,112 @@ export default function MenuScreen() {
 
     try {
       const [platillosRes, categoriasRes] = await Promise.all([
-        apiClient.get('/api/platillos').catch(() => null),
-        apiClient.get('/api/categorias').catch(() => null),
+        apiClient.get('/api/platillos'),
+        apiClient.get('/api/categorias'),
       ]);
+
+      // Procesar categorías y mapa por ID
+      const rawCategorias =
+        categoriasRes?.data?.data || categoriasRes?.data || [];
+      const categoryList = Array.isArray(rawCategorias) ? rawCategorias : [];
+      const categoryById = new Map<string, string>();
+      const catNames: string[] = [];
+
+      for (const c of categoryList) {
+        const catName = c?.nombre || c?.name;
+        if (typeof catName === 'string' && catName.trim().length > 0) {
+          const trimmed = catName.trim();
+          catNames.push(trimmed);
+          if (c?.id !== undefined && c?.id !== null) {
+            categoryById.set(String(c.id), trimmed);
+          }
+          if (c?._id !== undefined && c?._id !== null) {
+            categoryById.set(String(c._id), trimmed);
+          }
+        }
+      }
+
+      if (catNames.length > 0) {
+        setCategories(normalizeCategories(catNames));
+      } else {
+        setCategories(DEFAULT_CATEGORIES);
+      }
 
       // Procesar platillos
       const rawPlatillos =
         platillosRes?.data?.data || platillosRes?.data || [];
-      const formattedPlatillos: MenuItem[] = rawPlatillos.map((p: any) => ({
+      const resolveItemCategory = (p: any): string => {
+        const directName =
+          (typeof p?.category === 'string' && p.category) ||
+          (typeof p?.categoria === 'string' && p.categoria) ||
+          p?.categoria_nombre ||
+          p?.category_name ||
+          p?.nombre_categoria ||
+          p?.categoria?.nombre ||
+          p?.categoria?.name ||
+          p?.category?.nombre ||
+          p?.category?.name;
+
+        if (typeof directName === 'string' && directName.trim().length > 0) {
+          return directName.trim();
+        }
+
+        const catId = p?.categoria_id ?? p?.category_id ?? p?.categoriaId ?? p?.categoryId;
+        if (catId !== undefined && catId !== null) {
+          const mapped = categoryById.get(String(catId));
+          if (mapped) return mapped;
+        }
+
+        return 'Almuerzo';
+      };
+
+      const resolveItemImage = (p: any): string | ImageSourcePropType => {
+        const rawImg = p?.image || p?.imagen || p?.imagen_url || p?.image_url;
+        if (typeof rawImg === 'string' && rawImg.trim().length > 0) {
+          const trimmed = rawImg.trim();
+          const fileKey = trimmed.split('/').pop()?.toLowerCase() || '';
+          if (LOCAL_PLATILLO_IMAGES[fileKey]) {
+            return LOCAL_PLATILLO_IMAGES[fileKey];
+          }
+        }
+
+        const dishName = normalizeText(String(p?.name || p?.nombre || ''));
+        if (dishName) {
+          const match = LOCAL_IMAGE_KEYWORDS.find((entry) =>
+            entry.keywords.some((kw) => dishName.includes(kw))
+          );
+          if (match && LOCAL_PLATILLO_IMAGES[match.file]) {
+            return LOCAL_PLATILLO_IMAGES[match.file];
+          }
+        }
+
+        if (typeof rawImg === 'string' && rawImg.trim().length > 0) {
+          const trimmed = rawImg.trim();
+          if (trimmed.startsWith('/')) {
+            const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+            return `${origin}${trimmed}`;
+          }
+          return trimmed;
+        }
+        return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400';
+      };
+
+      const formattedPlatillos: MenuItem[] = (Array.isArray(rawPlatillos) ? rawPlatillos : []).map((p: any) => ({
         id: p.id || p._id,
         name: p.name || p.nombre,
         description: p.description || p.descripcion || '',
         price: typeof p.price === 'number' ? `$${p.price.toFixed(2)}` : p.price || '$0.00',
         badge: p.badge || null,
         badgeType: p.badgeType || 'green',
-        image: p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
-        category: p.category || p.categoria || 'Plato Fuerte',
+        image: resolveItemImage(p),
+        category: resolveItemCategory(p),
       }));
 
       setMenuItems(formattedPlatillos);
-
-      // Procesar categorías
-      const rawCategorias =
-        categoriasRes?.data?.data || categoriasRes?.data || [];
-      const catNames = rawCategorias.map((c: any) => c.nombre || c.name);
-      if (catNames.length > 0) {
-        setCategories(['Todos', ...catNames]);
-      } else {
-        setCategories(['Todos', 'Entradas', 'Plato Fuerte', 'Postres']);
-      }
     } catch (err: any) {
       console.warn('[MenuScreen] Error al conectar con el servidor:', err?.message || err);
       setErrorMessage('No se pudo conectar con el servidor. Mostrando catálogo local de respaldo.');
+      setCategories(DEFAULT_CATEGORIES);
       // Fallback estático de emergencia si el backend no responde
       setMenuItems([
         {
@@ -106,7 +242,7 @@ export default function MenuScreen() {
           badge: 'Fresh',
           badgeType: 'green',
           image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400',
-          category: 'Entradas',
+          category: 'Desayuno',
         },
         {
           id: '2',
@@ -114,7 +250,7 @@ export default function MenuScreen() {
           description: 'Hamburguesa de res premium con queso artesanal.',
           price: '$14.50',
           image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',
-          category: 'Plato Fuerte',
+          category: 'Almuerzo',
         },
       ]);
     } finally {
@@ -128,9 +264,12 @@ export default function MenuScreen() {
   }, [fetchMenuData]);
 
   const filteredItems = menuItems.filter((item) => {
+    const itemCategory = item.category?.toLowerCase() || '';
+    const selectedCategory = activeCategory.toLowerCase();
     const matchesCategory =
       activeCategory === 'Todos' ||
-      item.category?.toLowerCase() === activeCategory.toLowerCase();
+      itemCategory === selectedCategory ||
+      (selectedCategory === 'almuerzo' && itemCategory === 'almuerzo ejecutivo');
     const matchesSearch =
       item.name?.toLowerCase().includes(searchText.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchText.toLowerCase());
@@ -138,9 +277,13 @@ export default function MenuScreen() {
   });
 
   const renderMenuCard = ({ item }: { item: MenuItem }) => (
-    <View style={styles.card}>
+    <View style={[styles.card, { width: cardWidth }]}>
       <View style={styles.cardImageContainer}>
-        <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+        <Image
+          source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
         {item.badge && (
           <View
             style={[
@@ -232,11 +375,22 @@ export default function MenuScreen() {
         <View style={styles.featuredBanner}>
           <View style={styles.featuredOverlay}>
             <View style={styles.chefBadge}>
-              <Text style={styles.chefBadgeText}>RECOMENDACIÓN DEL CHEF</Text>
+              <Text style={styles.chefBadgeText}>BENEFICIO DIARIO</Text>
             </View>
             <Text style={styles.featuredTitle}>
-              Corte Artisan{'\n'}con Finas Hierbas
+              Desayuno, Almuerzo{'\n'}o Refrigerio hoy
             </Text>
+            <View style={styles.featuredFooter}>
+              <TouchableOpacity
+                style={styles.featuredButton}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('Canje')}
+              >
+                <MaterialIcons name="qr-code-2" size={18} color={Colors.onPrimaryContainer} />
+                <Text style={styles.featuredButtonText}>Generar QR</Text>
+              </TouchableOpacity>
+              <Text style={styles.featuredDailyNote}>1 canje por día</Text>
+            </View>
           </View>
         </View>
 
@@ -306,7 +460,15 @@ export default function MenuScreen() {
 
             {selectedItem && (
               <>
-                <Image source={{ uri: selectedItem.image }} style={popupStyles.image} resizeMode="cover" />
+                <Image
+                  source={
+                    typeof selectedItem.image === 'string'
+                      ? { uri: selectedItem.image }
+                      : selectedItem.image
+                  }
+                  style={popupStyles.image}
+                  resizeMode="cover"
+                />
                 <Text style={popupStyles.name}>{selectedItem.name}</Text>
                 <Text style={popupStyles.description}>{selectedItem.description}</Text>
                 <TouchableOpacity
@@ -355,7 +517,7 @@ const styles = StyleSheet.create({
   featuredBanner: {
     marginHorizontal: 20,
     marginTop: 16,
-    height: 160,
+    minHeight: 160,
     borderRadius: BorderRadius.xxxl,
     backgroundColor: Colors.inverseSurface,
     overflow: 'hidden',
@@ -366,6 +528,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(39, 53, 23, 0.75)',
     padding: 20,
     justifyContent: 'space-between',
+    gap: 12,
   },
   chefBadge: {
     backgroundColor: Colors.tertiaryContainer,
@@ -398,7 +561,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
   },
   featuredButtonText: { fontSize: 13, fontWeight: '700', color: Colors.onPrimaryContainer },
-  featuredPrice: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  featuredDailyNote: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
   filtersScroll: { maxHeight: 50, marginBottom: 8 },
   filtersContainer: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
   filterChip: {
@@ -426,7 +589,6 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 20, paddingBottom: 20 },
   row: { gap: 12, marginBottom: 12 },
   card: {
-    width: CARD_WIDTH,
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: BorderRadius.xxl,
     overflow: 'hidden',
