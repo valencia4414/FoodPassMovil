@@ -249,7 +249,7 @@ export default function CanjeScreen() {
           {activeTab === 'qr' ? (
             renderQRSection()
           ) : (
-            /* === VISTA CÓDIGO MANUAL — SIN MODIFICAR FORMATO === */
+            /* === VISTA CÓDIGO MANUAL === */
             <View style={styles.codeSection}>
               <Text style={styles.codeTitle}>Tu código de hoy</Text>
               <View style={styles.codeDisplay}>
@@ -262,8 +262,26 @@ export default function CanjeScreen() {
               <Text style={styles.codeSubtitle}>
                 {qrData?.code
                   ? 'Dicta este código en caja si el lector QR no funciona'
-                  : 'Presiona "Código QR" y genera tu código de hoy'}
+                  : 'Presiona el botón para generar tu código manual de hoy'}
               </Text>
+
+              <TouchableOpacity
+                style={[styles.generateBtn, { marginTop: 20 }]}
+                onPress={handleGenerateQR}
+                activeOpacity={0.85}
+                disabled={qrState === 'loading'}
+              >
+                {qrState === 'loading' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="pin" size={20} color="#fff" />
+                    <Text style={styles.generateBtnText}>
+                      {qrData?.code ? 'REGENERAR CÓDIGO' : 'GENERAR CÓDIGO'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           )}
         </View>
