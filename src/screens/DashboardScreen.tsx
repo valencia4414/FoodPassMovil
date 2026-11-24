@@ -226,7 +226,6 @@ export default function DashboardScreen() {
                   <Text style={styles.transactionDate}>{transaction.date}</Text>
                 </View>
                 <View style={styles.transactionRight}>
-                  <Text style={styles.transactionAmount}>{transaction.amount}</Text>
                   <View style={styles.freshnessBadge}>
                     <Text style={styles.freshnessBadgeText}>OK</Text>
                   </View>

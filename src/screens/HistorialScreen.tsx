@@ -199,7 +199,6 @@ export default function HistorialScreen() {
           <Text style={styles.transactionDate}>{formatTxDate(orderDate)}</Text>
         </View>
         <View style={styles.transactionRight}>
-          <Text style={styles.transactionAmount}>{`$${formatCurrency(Number(item.total))}`}</Text>
           <View style={[styles.statusBadge, badgeStyle]}>
             <Text style={[styles.statusBadgeText, textStyle]}>
               {badgeLabel}
@@ -259,13 +258,6 @@ export default function HistorialScreen() {
                 <Text style={styles.heroStatLabel}>TOTAL PEDIDOS</Text>
                 <Text style={[styles.heroStatNumber, { color: Colors.primary }]}>
                   {stats.totalPedidos}
-                </Text>
-              </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStatCol}>
-                <Text style={styles.heroStatLabel}>AHORRO TOTAL</Text>
-                <Text style={[styles.heroStatNumber, { color: Colors.tertiary }]}>
-                  ${formatCurrency(stats.totalAhorro)}
                 </Text>
               </View>
             </View>

@@ -1,0 +1,84 @@
+[1mdiff --git a/src/screens/DashboardScreen.tsx b/src/screens/DashboardScreen.tsx[m
+[1mindex a52686b..5c3e6dc 100644[m
+[1m--- a/src/screens/DashboardScreen.tsx[m
+[1m+++ b/src/screens/DashboardScreen.tsx[m
+[36m@@ -226,7 +226,6 @@[m [mexport default function DashboardScreen() {[m
+                   <Text style={styles.transactionDate}>{transaction.date}</Text>[m
+                 </View>[m
+                 <View style={styles.transactionRight}>[m
+[31m-                  <Text style={styles.transactionAmount}>{transaction.amount}</Text>[m
+                   <View style={styles.freshnessBadge}>[m
+                     <Text style={styles.freshnessBadgeText}>OK</Text>[m
+                   </View>[m
+[1mdiff --git a/src/screens/HistorialScreen.tsx b/src/screens/HistorialScreen.tsx[m
+[1mindex 1d8a470..c3d399c 100644[m
+[1m--- a/src/screens/HistorialScreen.tsx[m
+[1m+++ b/src/screens/HistorialScreen.tsx[m
+[36m@@ -199,7 +199,6 @@[m [mexport default function HistorialScreen() {[m
+           <Text style={styles.transactionDate}>{formatTxDate(orderDate)}</Text>[m
+         </View>[m
+         <View style={styles.transactionRight}>[m
+[31m-          <Text style={styles.transactionAmount}>{`$${formatCurrency(Number(item.total))}`}</Text>[m
+           <View style={[styles.statusBadge, badgeStyle]}>[m
+             <Text style={[styles.statusBadgeText, textStyle]}>[m
+               {badgeLabel}[m
+[36m@@ -261,13 +260,6 @@[m [mexport default function HistorialScreen() {[m
+                   {stats.totalPedidos}[m
+                 </Text>[m
+               </View>[m
+[31m-              <View style={styles.heroStatDivider} />[m
+[31m-              <View style={styles.heroStatCol}>[m
+[31m-                <Text style={styles.heroStatLabel}>AHORRO TOTAL</Text>[m
+[31m-                <Text style={[styles.heroStatNumber, { color: Colors.tertiary }]}>[m
+[31m-                  ${formatCurrency(stats.totalAhorro)}[m
+[31m-                </Text>[m
+[31m-              </View>[m
+             </View>[m
+           </View>[m
+         </View>[m
+[1mdiff --git a/src/screens/LoginScreen.tsx b/src/screens/LoginScreen.tsx[m
+[1mindex e2aefe0..44e4f04 100644[m
+[1m--- a/src/screens/LoginScreen.tsx[m
+[1m+++ b/src/screens/LoginScreen.tsx[m
+[36m@@ -56,7 +56,12 @@[m [mexport default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis[m
+     const cleanEmail = email.trim();[m
+     const cleanPassword = password.trim();[m
+ [m
+[31m-    // 1. Validaciones de datos de entrada[m
+[32m+[m[32m    // 1. Quitar el foco del elemento activo para evitar advertencia de aria-hidden en Web[m
+[32m+[m[32m    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {[m
+[32m+[m[32m      document.activeElement.blur();[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // 2. Validaciones de datos de entrada[m
+     if (!cleanEmail || !cleanPassword) {[m
+       Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');[m
+       return;[m
+[1mdiff --git a/src/screens/RegisterScreen.tsx b/src/screens/RegisterScreen.tsx[m
+[1mindex 6f9cd32..726117f 100644[m
+[1m--- a/src/screens/RegisterScreen.tsx[m
+[1m+++ b/src/screens/RegisterScreen.tsx[m
+[36m@@ -47,6 +47,10 @@[m [mexport default function RegisterScreen({ navigation }: any) {[m
+     const cleanEmail = email.trim();[m
+     const cleanPassword = password;[m
+ [m
+[32m+[m[32m    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {[m
+[32m+[m[32m      document.activeElement.blur();[m
+[32m+[m[32m    }[m
+[32m+[m
+     // 1. Validación de campos obligatorios[m
+     if (!cleanName || !cleanDoc || !cleanEmail || !cleanPassword) {[m
+       Alert.alert('Campos incompletos', 'Por favor completa todos los campos del formulario.');[m
+[1mdiff --git a/src/styles/colors.ts b/src/styles/colors.ts[m
+[1mindex 6bd568f..3a85ef2 100644[m
+[1m--- a/src/styles/colors.ts[m
+[1m+++ b/src/styles/colors.ts[m
+[36m@@ -4,7 +4,7 @@[m [mexport const COLORS = {[m
+   primary: '#F97F2D',    // Naranja[m
+   secondary: '#2F9B34',  // Verde[m
+   accent: '#C45A1B',     // Marrón/Naranja oscuro[m
+[31m-  dark: '#283618',       // Verde oscuro[m
+[32m+[m[32m  dark: '#273517',       // Verde oscuro[m
+   white: '#FFFFFF',[m
+   lightGray: '#F5F5F5',[m
+   shadow: '#00000020',   // Sombra con transparencia[m

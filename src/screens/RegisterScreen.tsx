@@ -49,6 +49,10 @@ export default function RegisterScreen({ navigation }: any) {
     const cleanEmail = email.trim();
     const cleanPassword = password;
 
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     // 1. Validación de campos obligatorios
     if (!cleanName || !cleanDoc || !cleanEmail || !cleanPassword) {
       Alert.alert('Campos incompletos', 'Por favor completa todos los campos del formulario.');
