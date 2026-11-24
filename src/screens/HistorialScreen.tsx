@@ -1,9 +1,9 @@
 // src/screens/HistorialScreen.tsx
 //
-// Pantalla de historial de pedidos (T10 - RFM07).
-// Conectada dinámicamente con el endpoint GET /api/pedidos/me y MySQL.
+// Historial de canjes del beneficiario.
+// Conectada con GET /api/canjes/me (tabla canjes).
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Modal,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -20,60 +19,45 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
-import PedidoStatusTracker from '../components/PedidoStatusTracker';
 import { apiClient } from '../services/apiClient';
 
 const filters = ['Todos', 'Últimos 30 días', 'Este mes', 'Pasados'];
 
-export interface OrderItem {
+export interface Canje {
   id: number;
-  producto_id: number;
-  nombre: string;
-  descripcion?: string;
-  cantidad: number;
-  precio_unitario: number;
-  subtotal: number;
-  imagen_url?: string | null;
+  tipo_canje: string;
+  fecha_canje: string;
+  estado: string;
+  sede: string;
 }
 
-export interface Pedido {
-  id: number;
-  usuario_id: number;
-  fecha_pedido: string;
-  total: number;
-  estado: string;
-  items: OrderItem[];
-}
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
 const formatTxDate = (date: Date) => {
   if (!date || isNaN(date.getTime())) return '';
-  const now = new Date();
-  const diffTime = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
-  if (diffDays === 0 && date.getDate() === now.getDate()) return `Hoy, ${timeStr}`;
-  if (diffDays === 1 || (diffDays === 0 && date.getDate() !== now.getDate())) return `Ayer, ${timeStr}`;
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / (1000 * 60 * 60 * 24));
+  const timeStr = date
+    .toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })
+    .toUpperCase();
+  if (diffDays === 0) return `Hoy, ${timeStr}`;
+  if (diffDays === 1) return `Ayer, ${timeStr}`;
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} ${timeStr}`;
 };
-
-const formatCurrency = (val: number) =>
-  val.toLocaleString('es-CO', { maximumFractionDigits: 0 });
 
 export default function HistorialScreen() {
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Estados para datos dinámicos desde la API (T10 - RFM07)
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  // Datos dinámicos desde la API
+  const [canjes, setCanjes] = useState<Canje[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Carga de pedidos reales desde el backend
-  const fetchPedidos = useCallback(async (isRefresh = false) => {
+  // Carga de canjes reales desde el backend
+  const fetchCanjes = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setIsRefreshing(true);
     } else {
@@ -82,17 +66,13 @@ export default function HistorialScreen() {
     setErrorMessage(null);
 
     try {
-      const response = await apiClient.get('/pedidos/me');
-      if (response.data && response.data.success) {
-        setPedidos(response.data.data || []);
-      } else if (Array.isArray(response.data)) {
-        setPedidos(response.data);
-      } else {
-        setPedidos([]);
-      }
+      const response = await apiClient.get('/canjes/me');
+      setCanjes(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (err: any) {
-      console.error('[HistorialScreen] Error al obtener pedidos:', err?.message || err);
-      const msg = err?.response?.data?.message || 'No se pudo conectar con el servidor para cargar el historial.';
+      console.error('[HistorialScreen] Error al obtener canjes:', err?.message || err);
+      const msg =
+        err?.response?.data?.message ||
+        'No se pudo conectar con el servidor para cargar el historial.';
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
@@ -100,24 +80,18 @@ export default function HistorialScreen() {
     }
   }, []);
 
-  // Cargar pedidos al montar el componente
-  useEffect(() => {
-    fetchPedidos();
-  }, [fetchPedidos]);
-
-  // Recargar pedidos al volver a enfocar la pantalla
+  // Carga al abrir la pestaña y cada vez que vuelve a enfocarse
   useFocusEffect(
     useCallback(() => {
-      fetchPedidos();
-    }, [fetchPedidos])
+      fetchCanjes();
+    }, [fetchCanjes])
   );
 
-  // Filtrado Combinado (Tiempo + Búsqueda de texto)
-  const filteredPedidos = useMemo(() => {
-    return pedidos.filter((item) => {
-      const orderDate = new Date(item.fecha_pedido);
-      const timeDiff = Date.now() - orderDate.getTime();
-      const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+  // Filtrado combinado (tiempo + búsqueda de texto)
+  const filteredCanjes = useMemo(() => {
+    return canjes.filter((item) => {
+      const fecha = new Date(item.fecha_canje);
+      const daysDiff = (Date.now() - fecha.getTime()) / (1000 * 60 * 60 * 24);
 
       let matchesTime = true;
       if (activeFilter === 'Últimos 30 días') {
@@ -125,89 +99,56 @@ export default function HistorialScreen() {
       } else if (activeFilter === 'Este mes') {
         const now = new Date();
         matchesTime =
-          orderDate.getMonth() === now.getMonth() &&
-          orderDate.getFullYear() === now.getFullYear();
+          fecha.getMonth() === now.getMonth() && fecha.getFullYear() === now.getFullYear();
       } else if (activeFilter === 'Pasados') {
         matchesTime = daysDiff > 30;
       }
 
-      const q = searchText.toLowerCase();
-      const matchesId = `pedido #${item.id}`.toLowerCase().includes(q) || `#${item.id}`.includes(q);
-      const matchesEstado = item.estado ? item.estado.toLowerCase().includes(q) : false;
-      const matchesProduct = item.items && item.items.some((prod) =>
-        prod.nombre.toLowerCase().includes(q) || (prod.descripcion && prod.descripcion.toLowerCase().includes(q))
-      );
-
-      const matchesSearch = matchesId || matchesEstado || matchesProduct || q.trim() === '';
+      const q = searchText.toLowerCase().trim();
+      const matchesSearch =
+        q === '' ||
+        (item.tipo_canje || '').toLowerCase().includes(q) ||
+        (item.estado || '').toLowerCase().includes(q) ||
+        (item.sede || '').toLowerCase().includes(q);
 
       return matchesTime && matchesSearch;
     });
-  }, [pedidos, activeFilter, searchText]);
+  }, [canjes, activeFilter, searchText]);
 
-  // Estadísticas calculadas dinámicamente
+  // Estadísticas
   const stats = useMemo(() => {
-    const totalPedidos = pedidos.length;
-    const totalGastado = pedidos.reduce((acc, p) => acc + (Number(p.total) || 0), 0);
-    const totalAhorro = Math.round(totalGastado * 0.1);
-    return { totalPedidos, totalAhorro };
-  }, [pedidos]);
+    const now = new Date();
+    const esteMes = canjes.filter((c) => {
+      const f = new Date(c.fecha_canje);
+      return f.getMonth() === now.getMonth() && f.getFullYear() === now.getFullYear();
+    }).length;
+    return { total: canjes.length, esteMes };
+  }, [canjes]);
 
-  // Renderizado individual de una orden
-  const renderPedidoItem = (item: Pedido) => {
-    const orderDate = new Date(item.fecha_pedido);
-    const hasItems = item.items && item.items.length > 0;
-
-    const mainTitle = hasItems
-      ? item.items.length === 1
-        ? item.items[0].nombre
-        : `${item.items[0].nombre} +${item.items.length - 1}`
-      : `Pedido #${item.id}`;
-
-    const subtitle = hasItems
-      ? item.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(', ')
-      : 'FoodPass — Sede Principal';
-
-    const estadoLower = (item.estado || '').toLowerCase();
-    const isOk = estadoLower === 'entregado' || estadoLower === 'listo';
-    const isCanceled = estadoLower === 'cancelado';
-
-    let badgeStyle = styles.statusBadgePending;
-    let textStyle = styles.statusTextPending;
-    let badgeLabel = item.estado ? item.estado.toUpperCase() : 'PENDIENTE';
-
-    if (isOk) {
-      badgeStyle = styles.statusBadgeOk;
-      textStyle = styles.statusTextOk;
-    } else if (isCanceled) {
-      badgeStyle = styles.statusBadgeCanceled;
-      textStyle = styles.statusTextCanceled;
-    }
-
-    return (
-      <TouchableOpacity
-        key={item.id}
-        style={styles.transactionCard}
-        activeOpacity={0.8}
-        onPress={() => setSelectedOrderId(String(item.id))}
-      >
-        <View style={styles.transactionIconWrap}>
-          <MaterialIcons name="restaurant" size={22} color={Colors.primary} />
+  // Renderizado individual de un canje
+  const renderCanje = (item: Canje) => (
+    <View key={item.id} style={styles.transactionCard}>
+      <View style={styles.transactionIconWrap}>
+        <MaterialIcons name="restaurant" size={22} color={Colors.primary} />
+      </View>
+      <View style={styles.transactionInfo}>
+        <Text style={styles.transactionName} numberOfLines={1}>
+          {item.tipo_canje}
+        </Text>
+        <Text style={styles.transactionRestaurant} numberOfLines={1}>
+          {item.sede || 'Sede Principal'}
+        </Text>
+        <Text style={styles.transactionDate}>{formatTxDate(new Date(item.fecha_canje))}</Text>
+      </View>
+      <View style={styles.transactionRight}>
+        <View style={[styles.statusBadge, styles.statusBadgeOk]}>
+          <Text style={[styles.statusBadgeText, styles.statusTextOk]}>
+            {(item.estado || 'Canjeado').toUpperCase()}
+          </Text>
         </View>
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionName} numberOfLines={1}>{mainTitle}</Text>
-          <Text style={styles.transactionRestaurant} numberOfLines={1}>{subtitle}</Text>
-          <Text style={styles.transactionDate}>{formatTxDate(orderDate)}</Text>
-        </View>
-        <View style={styles.transactionRight}>
-          <View style={[styles.statusBadge, badgeStyle]}>
-            <Text style={[styles.statusBadgeText, textStyle]}>
-              {badgeLabel}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -218,12 +159,17 @@ export default function HistorialScreen() {
         )}
         {isSearching && (
           <View style={styles.fullSearchBar}>
-            <TouchableOpacity onPress={() => { setIsSearching(false); setSearchText(''); }}>
+            <TouchableOpacity
+              onPress={() => {
+                setIsSearching(false);
+                setSearchText('');
+              }}
+            >
               <MaterialIcons name="arrow-back" size={24} color={Colors.primary} />
             </TouchableOpacity>
             <TextInput
               style={styles.inputField}
-              placeholder="Buscar por plato, pedido o estado..."
+              placeholder="Buscar por tipo de canje, sede o estado..."
               placeholderTextColor="#888"
               autoFocus
               value={searchText}
@@ -244,7 +190,7 @@ export default function HistorialScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={() => fetchPedidos(true)}
+            onRefresh={() => fetchCanjes(true)}
             colors={[Colors.primaryContainer]}
             tintColor={Colors.primaryContainer}
           />
@@ -255,9 +201,15 @@ export default function HistorialScreen() {
             <Text style={styles.heroStatTitle}>Trayectoria Gastronómica</Text>
             <View style={styles.heroStats}>
               <View style={styles.heroStatCol}>
-                <Text style={styles.heroStatLabel}>TOTAL PEDIDOS</Text>
+                <Text style={styles.heroStatLabel}>TOTAL CANJES</Text>
                 <Text style={[styles.heroStatNumber, { color: Colors.primary }]}>
-                  {stats.totalPedidos}
+                  {stats.total}
+                </Text>
+              </View>
+              <View style={styles.heroStatCol}>
+                <Text style={styles.heroStatLabel}>ESTE MES</Text>
+                <Text style={[styles.heroStatNumber, { color: Colors.tertiary }]}>
+                  {stats.esteMes}
                 </Text>
               </View>
             </View>
@@ -276,7 +228,12 @@ export default function HistorialScreen() {
               style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}
               onPress={() => setActiveFilter(filter)}
             >
-              <Text style={[styles.filterChipText, activeFilter === filter && styles.filterChipTextActive]}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === filter && styles.filterChipTextActive,
+                ]}
+              >
                 {filter}
               </Text>
             </TouchableOpacity>
@@ -286,7 +243,7 @@ export default function HistorialScreen() {
         <View style={styles.listSection}>
           <View style={styles.listHeaderRow}>
             <Text style={styles.listTitle}>Historial Detallado</Text>
-            <TouchableOpacity onPress={() => fetchPedidos(true)} style={styles.refreshButton}>
+            <TouchableOpacity onPress={() => fetchCanjes(true)} style={styles.refreshButton}>
               <MaterialIcons name="refresh" size={18} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -294,7 +251,7 @@ export default function HistorialScreen() {
           {isLoading && !isRefreshing && (
             <View style={styles.stateContainer}>
               <ActivityIndicator size="large" color={Colors.primaryContainer} />
-              <Text style={styles.stateText}>Cargando pedidos desde el servidor...</Text>
+              <Text style={styles.stateText}>Cargando tus canjes...</Text>
             </View>
           )}
 
@@ -303,62 +260,35 @@ export default function HistorialScreen() {
               <MaterialIcons name="error-outline" size={44} color={Colors.error} />
               <Text style={styles.errorTitle}>Error de conexión</Text>
               <Text style={styles.stateText}>{errorMessage}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => fetchPedidos()}>
+              <TouchableOpacity style={styles.retryButton} onPress={() => fetchCanjes()}>
                 <MaterialIcons name="replay" size={18} color="#fff" />
                 <Text style={styles.retryButtonText}>Reintentar</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {!isLoading && !errorMessage && filteredPedidos.length === 0 && (
+          {!isLoading && !errorMessage && filteredCanjes.length === 0 && (
             <View style={styles.stateContainer}>
               <MaterialIcons name="receipt-long" size={44} color={Colors.outline} />
               <Text style={styles.emptyTitle}>
-                {pedidos.length === 0 ? 'Sin pedidos registrados' : 'No se encontraron resultados'}
+                {canjes.length === 0 ? 'Aún no tienes canjes' : 'No se encontraron resultados'}
               </Text>
               <Text style={styles.stateText}>
-                {pedidos.length === 0
-                  ? 'Tus compras y órdenes confirmadas aparecerán aquí.'
+                {canjes.length === 0
+                  ? 'Cuando canjes tu comida con el código QR, aparecerá aquí.'
                   : 'Prueba con otro filtro o término de búsqueda.'}
               </Text>
             </View>
           )}
 
-          {!isLoading && !errorMessage && filteredPedidos.length > 0 && (
-            filteredPedidos.map((pedido) => renderPedidoItem(pedido))
-          )}
+          {!isLoading &&
+            !errorMessage &&
+            filteredCanjes.length > 0 &&
+            filteredCanjes.map((canje) => renderCanje(canje))}
         </View>
 
         <View style={{ height: 28 }} />
       </ScrollView>
-
-      {selectedOrderId && (
-        <Modal
-          visible={Boolean(selectedOrderId)}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setSelectedOrderId(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeaderRow}>
-                <View style={styles.modalHeaderTitleWrap}>
-                  <MaterialIcons name="track-changes" size={22} color={Colors.primary} />
-                  <Text style={styles.modalHeaderTitle}>Seguimiento en Vivo</Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setSelectedOrderId(null)}
-                  style={styles.modalCloseBtn}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <MaterialIcons name="close" size={24} color={Colors.onSurfaceVariant} />
-                </TouchableOpacity>
-              </View>
-              <PedidoStatusTracker initialOrderId={selectedOrderId} compact={true} />
-            </View>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
@@ -395,25 +325,14 @@ const styles = StyleSheet.create({
   transactionRestaurant: { fontSize: 11, color: '#888', marginTop: 2 },
   transactionDate: { fontSize: 11, color: '#888', marginTop: 2 },
   transactionRight: { alignItems: 'flex-end', gap: 4 },
-  transactionAmount: { fontSize: 14, fontWeight: '700', color: Colors.onBackground },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   statusBadgeOk: { backgroundColor: Colors.tertiaryContainer },
-  statusBadgePending: { backgroundColor: Colors.primaryContainer },
-  statusBadgeCanceled: { backgroundColor: Colors.errorContainer },
   statusBadgeText: { fontSize: 9, fontWeight: '700' },
   statusTextOk: { color: Colors.onTertiaryContainer },
-  statusTextPending: { color: Colors.onPrimaryContainer },
-  statusTextCanceled: { color: Colors.error },
   stateContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 36, gap: 8 },
   stateText: { fontSize: 13, color: '#888', textAlign: 'center', maxWidth: 280 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.onBackground, marginTop: 4 },
   errorTitle: { fontSize: 15, fontWeight: '700', color: Colors.error, marginTop: 4 },
   retryButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: BorderRadius.lg, marginTop: 8 },
   retryButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(18, 31, 5, 0.65)', justifyContent: 'center', padding: 16 },
-  modalContent: { backgroundColor: Colors.surfaceContainerLowest, borderRadius: BorderRadius.xxl, padding: 16, maxHeight: '85%' },
-  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.surfaceContainerHigh, marginBottom: 8 },
-  modalHeaderTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modalHeaderTitle: { fontSize: 16, fontWeight: '800', color: Colors.onBackground },
-  modalCloseBtn: { padding: 4 },
 });

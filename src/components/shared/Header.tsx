@@ -13,15 +13,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Typography, BorderRadius } from '../../theme/colors';
 import NotificationModal from './feedback/NotificationModal';
-import CartModal from './CartModal';
+
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { useCart } from '../../context/CartContext';
 
 interface HeaderProps {
   title: string;
   showSearch?: boolean;
-  showCart?: boolean;
+  showBack?: boolean;
+  onBack?: () => void;
   onSearchPress?: () => void;
   onSearchTextChange?: (text: string) => void;
 }
@@ -29,7 +29,8 @@ interface HeaderProps {
 export default function Header({
   title,
   showSearch = false,
-  showCart = false,
+  showBack = false,
+  onBack,
   onSearchPress,
   onSearchTextChange,
 }: HeaderProps) {
@@ -37,10 +38,10 @@ export default function Header({
   const insets = useSafeAreaInsets();
 
   const { userData } = useAuth();
-  const { totalItems } = useCart();
+
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [cartVisible, setCartVisible] = useState(false);
+
   const [isSearching, setIsSearching] = useState(false);
   const [searchText, setSearchText] = useState('');
   const debounceTimer = useRef<any>(null);
@@ -111,6 +112,16 @@ export default function Header({
       ) : (
         <>
           {/* MODO NORMAL: Logo + acciones */}
+          {showBack && (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={onBack ? onBack : () => navigation.goBack()}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={Colors.onBackground} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.titleContainer}>
             <View style={styles.brandRow}>
               <Image 
@@ -134,25 +145,6 @@ export default function Header({
               </TouchableOpacity>
             )}
 
-            {/* Botón del Carrito con Badge Dinámico (T07) */}
-            {showCart && (
-              <TouchableOpacity 
-                style={styles.iconButton} 
-                activeOpacity={0.7}
-                onPress={() => setCartVisible(true)}
-              >
-                <View style={styles.cartWrapper}>
-                  <MaterialIcons name="shopping-cart" size={22} color={Colors.onBackground} />
-                  {totalItems > 0 && (
-                    <View style={styles.cartBadge}>
-                      <Text style={styles.cartBadgeText}>
-                        {totalItems > 99 ? '99+' : totalItems}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            )}
 
             {/* Botón de notificaciones */}
             <TouchableOpacity 
@@ -182,13 +174,7 @@ export default function Header({
         onClose={() => setModalVisible(false)} 
       />
 
-      {/* El Modal del Carrito de Compras */}
-      {showCart && (
-        <CartModal
-          visible={cartVisible}
-          onClose={() => setCartVisible(false)}
-        />
-      )}
+   
     </View>
   );
 }
@@ -233,6 +219,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   iconButton: {
     width: 40,

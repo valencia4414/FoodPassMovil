@@ -17,7 +17,6 @@ import Header from '../components/shared/Header';
 import { Colors, BorderRadius } from '../theme/colors';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
-import PedidoStatusTracker from '../components/PedidoStatusTracker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -85,7 +84,6 @@ export default function DashboardScreen() {
   const totalPedidos = summary?.total_pedidos ?? 0;
   const almuerzosDisp = summary?.almuerzos_disponibles ?? 22;
   const almuerzosTotal = summary?.almuerzos_total_mes ?? 22;
-  const activeOrderId = summary?.pedido_activo_id;
 
   const transactions = summary?.ultimos_canjes || [];
   const filteredTransactions = transactions.filter((t) =>
@@ -99,7 +97,6 @@ export default function DashboardScreen() {
         <Header
           title="Panel Principal"
           showSearch
-          showCart={false}
           onSearchPress={() => setIsSearching(true)}
         />
 
@@ -181,7 +178,7 @@ export default function DashboardScreen() {
               </View>
               <Text style={styles.statBadge}>Registrados</Text>
             </View>
-            <Text style={styles.statLabel}>PEDIDOS REALIZADOS</Text>
+            <Text style={styles.statLabel}>CANJES REALIZADOS</Text>
             <Text style={styles.statNumber}>{totalPedidos}</Text>
           </View>
 

@@ -306,7 +306,7 @@ export default function CanjeScreen() {
             </View>
             <View style={styles.planInfoText}>
               <Text style={styles.planInfoLabel}>HORARIO DE CANJE</Text>
-              <Text style={styles.planInfoValue}>11:30 AM – 2:30 PM (días hábiles)</Text>
+              <Text style={styles.planInfoValue}>9:00 AM – 3:30 PM (días hábiles)</Text>
             </View>
           </View>
 

@@ -29,7 +29,6 @@ import SwitchField from '../components/shared/selection/SwitchField';
 import FavoriteLocationsModal from '../components/shared/selection/FavoriteLocationsModal';
 import SoporteChatScreen from './SoporteChatScreen';
 import { useAuth } from '../context/AuthContext';
-import { useCart } from '../context/CartContext';
 import { apiClient } from '../services/apiClient';
 import {
   getPushNotificationsEnabled,
@@ -47,29 +46,19 @@ type SettingItem = {
   value?: boolean;
 };
 
-// Datos del menú digital para modal de preferencias
-const menuPrefsItems = [
-  { id: '1', name: 'Arroz con pollo', description: 'Delicioso arroz con pollo', price: '$8500', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400', category: 'Entradas' },
-  { id: '2', name: 'Carne de cerdo', description: 'Carne de cerdo a la parrilla', price: '$9000', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', category: 'Plato Fuerte' },
-  { id: '3', name: 'Pollo Guisado', description: 'Presa de pollo en salsa de tomate', price: '$8000', image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=400', category: 'Plato Fuerte' },
-  { id: '4', name: 'Carne de res', description: 'Bistec a la parrilla', price: '$12000', image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400', category: 'Entradas' },
-  { id: '5', name: 'Pure de papas', description: 'Pure de papas con mantequilla y especias', price: '$3000', image: 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400', category: 'Plato Fuerte' },
-  { id: '6', name: 'Frijoles', description: 'Frijoles refritos con cebolla y cilantro', price: '$2500', image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400', category: 'Postres' },
-];
-type MenuPrefItem = typeof menuPrefsItems[0];
+
 
 export default function PerfilScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [chatVisible, setChatVisible] = useState(false);
   const [favModalVisible, setFavModalVisible] = useState(false);
-  const [menuPrefsVisible, setMenuPrefsVisible] = useState(false);
-  const [selectedMenuItem, setSelectedMenuItem] = useState<MenuPrefItem | null>(null);
+
 
   // Navegación y contextos
   const navigation = useNavigation<any>();
 
   const { logout, userData, updateUser } = useAuth();
-  const { addItem } = useCart();
+
 
   useEffect(() => {
     getPushNotificationsEnabled()
@@ -87,7 +76,7 @@ export default function PerfilScreen() {
       if (enabled && !isEnabled) {
         Alert.alert(
           'Notificaciones no habilitadas',
-          'Activa los permisos de notificación del dispositivo para recibir avisos de tus pedidos.'
+          'Activa los permisos de notificación del dispositivo para recibir avisos de tus canjes.'
         );
       }
     } catch (error) {
@@ -320,10 +309,8 @@ export default function PerfilScreen() {
 
           <View style={styles.profileStats}>
             <View style={styles.profileStat}>
-              <Text style={styles.profileStatNumber}>
-                {profileData?.pedidos_count !== undefined ? profileData.pedidos_count : (profileData?.total_pedidos ?? 0)}
-              </Text>
-              <Text style={styles.profileStatLabel}>PEDIDOS</Text>
+              <Text style={styles.profileStatNumber}>{profileData?.canjes_count ?? 0}</Text>
+              <Text style={styles.profileStatLabel}>CANJES</Text>
             </View>
             <View style={styles.profileStatDivider} />
             <View style={styles.profileStat}>
@@ -379,8 +366,6 @@ export default function PerfilScreen() {
                         handleOpenEditModal();
                       } else if (item.label === 'Contactar soporte') {
                         setChatVisible(true);
-                      } else if (item.label === 'Preferencias de menú') {
-                        setMenuPrefsVisible(true);
                       }
                     }}
                   >
@@ -579,83 +564,7 @@ export default function PerfilScreen() {
       {/* MODAL DE SEDES FAVORITAS */}
       <FavoriteLocationsModal visible={favModalVisible} onClose={() => setFavModalVisible(false)} />
 
-      {/* MODAL PREFERENCIAS DE MENÚ */}
-      <Modal
-        animationType="slide"
-        visible={menuPrefsVisible}
-        onRequestClose={() => setMenuPrefsVisible(false)}
-      >
-        <View style={menuStyles.container}>
-          <View style={menuStyles.header}>
-            <TouchableOpacity onPress={() => setMenuPrefsVisible(false)} style={menuStyles.backBtn}>
-              <MaterialIcons name="arrow-back-ios" size={20} color={Colors.primary} />
-            </TouchableOpacity>
-            <Text style={menuStyles.headerTitle}>Preferencias de Menú</Text>
-            <View style={{ width: 44 }} />
-          </View>
 
-          <FlatList
-            data={menuPrefsItems}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={menuStyles.card}
-                activeOpacity={0.85}
-                onPress={() => setSelectedMenuItem(item)}
-              >
-                <Image source={{ uri: item.image }} style={menuStyles.cardImage} resizeMode="cover" />
-                <View style={menuStyles.cardContent}>
-                  <Text style={menuStyles.cardName}>{item.name}</Text>
-                  <Text style={menuStyles.cardDesc} numberOfLines={2}>{item.description}</Text>
-                  <View style={menuStyles.cardFooter}>
-                    <Text style={menuStyles.cardPrice}>{item.price}</Text>
-                    <View style={menuStyles.cardBadge}>
-                      <Text style={menuStyles.cardBadgeText}>{item.category}</Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-
-        {/* Popup detalle del plato */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={selectedMenuItem !== null}
-          onRequestClose={() => setSelectedMenuItem(null)}
-        >
-          <Pressable style={menuStyles.popupOverlay} onPress={() => setSelectedMenuItem(null)}>
-            <Pressable style={menuStyles.popup} onPress={(e) => e.stopPropagation()}>
-              <TouchableOpacity style={menuStyles.popupClose} onPress={() => setSelectedMenuItem(null)}>
-                <MaterialIcons name="close" size={24} color={Colors.onSurfaceVariant} />
-              </TouchableOpacity>
-              {selectedMenuItem && (
-                <>
-                  <Image source={{ uri: selectedMenuItem.image }} style={menuStyles.popupImage} resizeMode="cover" />
-                  <Text style={menuStyles.popupName}>{selectedMenuItem.name}</Text>
-                  <Text style={menuStyles.popupDesc}>{selectedMenuItem.description}</Text>
-                  <Text style={menuStyles.popupPrice}>{selectedMenuItem.price}</Text>
-                  <TouchableOpacity
-                    style={menuStyles.popupAddBtn}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      addItem(selectedMenuItem as any);
-                      setSelectedMenuItem(null);
-                    }}
-                  >
-                    <MaterialIcons name="add-shopping-cart" size={20} color={Colors.onPrimaryContainer} />
-                    <Text style={menuStyles.popupAddText}>Agregar al carrito</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </Pressable>
-          </Pressable>
-        </Modal>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -753,7 +662,7 @@ const styles = StyleSheet.create({
   settingBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.onPrimaryContainer, letterSpacing: 0.5 },
   logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginHorizontal: 20, marginTop: 8, paddingVertical: 16, backgroundColor: Colors.errorContainer, borderRadius: BorderRadius.xl },
   logoutText: { fontSize: 15, fontWeight: '700', color: Colors.error },
-  
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
