@@ -56,7 +56,12 @@ export default function LoginScreen({ onLogin, onForgotPassword, onNavigateRegis
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
-    // 1. Validaciones de datos de entrada
+    // 1. Quitar el foco del elemento activo para evitar advertencia de aria-hidden en Web
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    // 2. Validaciones de datos de entrada
     if (!cleanEmail || !cleanPassword) {
       Alert.alert('Campos incompletos', 'Por favor ingresa tu correo y contraseña.');
       return;

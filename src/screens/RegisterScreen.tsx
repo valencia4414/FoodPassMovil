@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius } from '../theme/colors';
 import apiClient from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
+import NoBeneficiarioModal from '../components/NoBeneficiarioModal';
 
 export default function RegisterScreen({ navigation }: any) {
   const { login } = useAuth();
@@ -33,7 +34,8 @@ export default function RegisterScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [acceptPolicy, setAcceptPolicy] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [showNoBeneficiario, setShowNoBeneficiario] = useState(false);
+
   const [nameFocused, setNameFocused] = useState(false);
   const [documentoFocused, setDocumentoFocused] = useState(false); // <--- Focus para el documento
   const [fichaFocused, setFichaFocused] = useState(false);
@@ -46,6 +48,10 @@ export default function RegisterScreen({ navigation }: any) {
     const cleanDoc = documento.trim();
     const cleanEmail = email.trim();
     const cleanPassword = password;
+
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
 
     // 1. Validación de campos obligatorios
     if (!cleanName || !cleanDoc || !cleanEmail || !cleanPassword) {
@@ -145,8 +151,12 @@ export default function RegisterScreen({ navigation }: any) {
         ]);
       }
     } catch (error: any) {
+      if (error.response?.status === 403 && error.response?.data?.code === 'NO_BENEFICIARIO') {
+        setShowNoBeneficiario(true);
+        return;
+      }
       console.error('[RegisterScreen] Error durante el registro:', error);
-      
+
       const serverMessage = error.response?.data?.message;
       let finalMessage = serverMessage;
 
@@ -163,7 +173,7 @@ export default function RegisterScreen({ navigation }: any) {
           finalMessage = error.message || 'Ocurrió un error al registrar el usuario.';
         }
       }
-      
+
       Alert.alert('Error de registro', finalMessage);
     } finally {
       setIsLoading(false);
@@ -359,6 +369,13 @@ export default function RegisterScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <NoBeneficiarioModal
+        visible={showNoBeneficiario}
+        onBack={() => {
+          setShowNoBeneficiario(false);
+          navigation.goBack();
+        }}
+      />
     </SafeAreaView>
   );
 }
